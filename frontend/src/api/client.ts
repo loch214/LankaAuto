@@ -1,4 +1,4 @@
-import type { Brand, Category, PartDetail, PartListResponse, Vehicle } from './types';
+import type { AvailabilityStatus, Brand, Category, PartDetail, PartListResponse, Vehicle } from './types';
 
 // Vite exposes only VITE_-prefixed env vars to client code — anything else
 // in .env is invisible here by design, so a backend secret can't leak into
@@ -15,6 +15,13 @@ export class ApiError extends Error {
   }
 }
 
+async function parseErrorBody(res: Response): Promise<string> {
+  const body: unknown = await res.json().catch(() => null);
+  return body !== null && typeof body === 'object' && 'error' in body
+    ? String((body as { error: unknown }).error)
+    : res.statusText;
+}
+
 async function get<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
   const url = new URL(path, API_BASE_URL);
   for (const [key, value] of Object.entries(params ?? {})) {
@@ -22,14 +29,22 @@ async function get<T>(path: string, params?: Record<string, string | number | un
   }
 
   const res = await fetch(url);
-  if (!res.ok) {
-    const body: unknown = await res.json().catch(() => null);
-    const message =
-      body !== null && typeof body === 'object' && 'error' in body
-        ? String((body as { error: unknown }).error)
-        : res.statusText;
-    throw new ApiError(res.status, message);
-  }
+  if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res));
+  return res.json() as Promise<T>;
+}
+
+async function authedRequest<T>(
+  method: 'POST' | 'PATCH',
+  path: string,
+  token: string,
+  body: unknown,
+): Promise<T> {
+  const res = await fetch(new URL(path, API_BASE_URL), {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res));
   return res.json() as Promise<T>;
 }
 
@@ -43,6 +58,13 @@ export interface PartListParams {
   offset?: number;
 }
 
+export interface StaffUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'STAFF' | 'ADMIN';
+}
+
 export const api = {
   listParts: (params: PartListParams) =>
     get<PartListResponse>('/parts', params as Record<string, string | number | undefined>),
@@ -50,4 +72,23 @@ export const api = {
   listCategories: () => get<{ categories: Category[] }>('/categories').then((r) => r.categories),
   listBrands: () => get<{ brands: Brand[] }>('/brands').then((r) => r.brands),
   listVehicles: () => get<{ vehicles: Vehicle[] }>('/vehicles').then((r) => r.vehicles),
+
+  login: (email: string, password: string) =>
+    fetch(new URL('/auth/login', API_BASE_URL), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    }).then(async (res) => {
+      if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res));
+      return res.json() as Promise<{ token: string; user: StaffUser }>;
+    }),
+  me: (token: string) =>
+    fetch(new URL('/auth/me', API_BASE_URL), { headers: { Authorization: `Bearer ${token}` } }).then(
+      async (res) => {
+        if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res));
+        return res.json() as Promise<StaffUser>;
+      },
+    ),
+  updateAvailability: (token: string, partId: string, status: AvailabilityStatus) =>
+    authedRequest<PartDetail>('PATCH', `/parts/${partId}/availability`, token, { status }),
 };

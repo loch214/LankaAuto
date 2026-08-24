@@ -47,6 +47,7 @@ export interface Part {
   availabilityStatus: AvailabilityStatus;
   lastVerifiedAt: string | null;
   needsReview: boolean;
+  location: string | null;
   brand: Brand | null;
   category: Category;
 }

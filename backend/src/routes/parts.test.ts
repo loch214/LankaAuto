@@ -123,3 +123,69 @@ describe('GET /parts/:id', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('PATCH /parts/:id/availability', () => {
+  const TEST_EMAIL = 'availability-test-staff@lankaauto.local';
+  const TEST_PASSWORD = 'correct horse battery staple';
+  let staffToken: string;
+
+  beforeAll(async () => {
+    const { hashPassword } = await import('../lib/auth.js');
+    const passwordHash = await hashPassword(TEST_PASSWORD);
+    await prisma.user.upsert({
+      where: { email: TEST_EMAIL },
+      create: { name: 'Availability Test Staff', email: TEST_EMAIL, passwordHash, role: 'STAFF' },
+      update: { passwordHash, role: 'STAFF', isActive: true },
+    });
+    const login = await request.post('/auth/login').send({ email: TEST_EMAIL, password: TEST_PASSWORD });
+    staffToken = login.body.token;
+  });
+
+  afterAll(async () => {
+    await prisma.user.deleteMany({ where: { email: TEST_EMAIL } });
+  });
+
+  it('rejects an unauthenticated request with 401', async () => {
+    const part = await prisma.part.findFirstOrThrow();
+    const res = await request.patch(`/parts/${part.id}/availability`).send({ status: 'IN_STOCK' });
+    expect(res.status).toBe(401);
+  });
+
+  it('updates status, sets lastVerifiedAt and verifiedSource, and writes a verification log', async () => {
+    const part = await prisma.part.findFirstOrThrow();
+
+    const res = await request
+      .patch(`/parts/${part.id}/availability`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({ status: 'LOW' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.availabilityStatus).toBe('LOW');
+    expect(res.body.verifiedSource).toBe('STAFF');
+    expect(res.body.lastVerifiedAt).not.toBeNull();
+
+    const log = await prisma.verificationLog.findFirst({
+      where: { partId: part.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(log?.newStatus).toBe('LOW');
+    expect(log?.oldStatus).toBe(part.availabilityStatus);
+  });
+
+  it('rejects an invalid status value with 400', async () => {
+    const part = await prisma.part.findFirstOrThrow();
+    const res = await request
+      .patch(`/parts/${part.id}/availability`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({ status: 'NOT_A_REAL_STATUS' });
+    expect(res.status).toBe(400);
+  });
+
+  it('404s for a well-formed id that does not exist', async () => {
+    const res = await request
+      .patch('/parts/00000000-0000-0000-0000-000000000000/availability')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({ status: 'IN_STOCK' });
+    expect(res.status).toBe(404);
+  });
+});

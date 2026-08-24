@@ -1,6 +1,35 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens for the LankaAuto brand — a parts counter, not a SaaS
+ * product. Graphite/steel base with a safety-orange accent (the actual
+ * color of tool chests and hazard labelling in this trade), not the
+ * generic cream+serif or black+neon defaults.
+ */
+@theme {
+  --color-graphite: #1c1d1f;
+  --color-steel: #2a2c30;
+  --color-chalk: #f2f1ed;
+  --color-safety: #ff5a1f;
+  --color-signal: #f4c430;
+  --color-muted: #8b8d93;
+
+  --font-display: "Big Shoulders Display", sans-serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
 body {
   margin: 0;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

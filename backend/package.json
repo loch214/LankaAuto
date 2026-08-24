@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit",
     "check:db": "tsx src/scripts/check-db.ts",
     "ingest:gmb-ujoint": "tsx src/scripts/ingest-gmb-ujoint.ts",
+    "seed:admin": "tsx src/scripts/seed-admin.ts",
     "dev": "tsx watch src/server.ts",
     "db:verify": "npm run db:reset && npm run check:db",
     "migrate:apply": "prisma migrate deploy && npm run check:db",
@@ -28,15 +29,19 @@
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^16.4.7",
     "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@rolldown/binding-win32-x64-msvc": "^1.2.5",
+    "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.10.5",
     "@types/supertest": "^7.2.1",
     "prisma": "^6.1.0",

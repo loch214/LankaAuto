@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { AvailabilityStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { buildPartWhere } from '../services/part-search.js';
+import { requireAuth, requireRole } from '../middleware/require-auth.js';
 
 export const partsRouter = Router();
 
@@ -93,3 +95,56 @@ partsRouter.get('/:id', async (req, res, next) => {
     next(err);
   }
 });
+
+const updateAvailabilitySchema = z.object({
+  status: z.enum(AvailabilityStatus),
+});
+
+/**
+ * PATCH /parts/:id/availability — staff only.
+ *
+ * The "one-tap update" from PLAN.md §5: staff pick a status, nothing else.
+ * Every change is also written to `verification_log` (old status, new
+ * status, who, when) — the audit trail the freshness UI and overdue-category
+ * nudges depend on, so it's written here rather than left as a follow-up.
+ */
+partsRouter.patch(
+  '/:id/availability',
+  requireAuth,
+  requireRole('STAFF', 'ADMIN'),
+  async (req, res, next) => {
+    try {
+      const { id } = idParamSchema.parse(req.params);
+      const { status } = updateAvailabilitySchema.parse(req.body);
+
+      const existing = await prisma.part.findUnique({ where: { id } });
+      if (existing === null) {
+        res.status(404).json({ error: 'part not found' });
+        return;
+      }
+
+      const [part] = await prisma.$transaction([
+        prisma.part.update({
+          where: { id },
+          data: {
+            availabilityStatus: status,
+            lastVerifiedAt: new Date(),
+            verifiedSource: 'STAFF',
+          },
+        }),
+        prisma.verificationLog.create({
+          data: {
+            partId: id,
+            userId: req.user!.id,
+            oldStatus: existing.availabilityStatus,
+            newStatus: status,
+          },
+        }),
+      ]);
+
+      res.json(part);
+    } catch (err) {
+      next(err);
+    }
+  },
+);

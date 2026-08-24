@@ -4,6 +4,7 @@ import { partsRouter } from './routes/parts.js';
 import { categoriesRouter } from './routes/categories.js';
 import { brandsRouter } from './routes/brands.js';
 import { vehiclesRouter } from './routes/vehicles.js';
+import { authRouter } from './routes/auth.js';
 import { errorHandler } from './middleware/error-handler.js';
 
 /**
@@ -11,17 +12,20 @@ import { errorHandler } from './middleware/error-handler.js';
  * tests can `import { app }` and drive it with supertest directly, with no
  * real port bound and no risk of two test runs colliding on one.
  *
- * No auth here. PLAN.md §7/§8 puts staff-only tools behind JWT role
- * middleware, but that is Phase 6 — everything mounted here is the
- * customer-facing, read-only surface, deliberately first.
+ * Staff routes are gated by `requireAuth`/`requireRole` (see
+ * middleware/require-auth.ts), not by anything in this file — auth is
+ * per-route, not a blanket prefix, so the customer-facing routes stay
+ * exactly as open as before.
  */
 export function createApp() {
   const app = express();
+  app.use(express.json());
 
-  // Open CORS: this is a public, unauthenticated, read-only catalogue API —
-  // there is no session or credential a cross-origin request could steal.
-  // Revisit when the staff routes (Phase 6, JWT-gated) land, since those
-  // will need the real frontend origin, not a wildcard.
+  // Open CORS, even now that JWT-gated staff routes exist: auth here is a
+  // bearer token in an `Authorization` header, not a cookie, so it is never
+  // a "credential" in the CORS sense — a cross-origin site can't attach a
+  // token it was never given. The thing CORS credentials mode protects
+  // against (ambient cookie auth) doesn't apply to this API.
   app.use(cors());
 
   app.get('/health', (_req, res) => {
@@ -32,6 +36,7 @@ export function createApp() {
   app.use('/categories', categoriesRouter);
   app.use('/brands', brandsRouter);
   app.use('/vehicles', vehiclesRouter);
+  app.use('/auth', authRouter);
 
   app.use(errorHandler);
 

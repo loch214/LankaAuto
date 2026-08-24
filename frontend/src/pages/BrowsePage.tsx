@@ -1,20 +1,32 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Vehicle } from '../api/types';
+import { PartTag } from '../components/PartTag';
 
 const PAGE_SIZE = 20;
 
+const AVAILABILITY_DOT: Record<string, string> = {
+  IN_STOCK: 'bg-emerald-500',
+  LOW: 'bg-signal',
+  OUT_OF_STOCK: 'bg-red-500',
+  UNVERIFIED: 'bg-muted',
+};
+
 /**
  * The catalogue browse page: search box plus the three filters PLAN.md §8
- * calls out — category, brand, vehicle make/model. Deliberately not a
- * landing page (hero, opening hours, etc.) — that's Phase 9 polish; this is
- * Phase 2's "public browse pages with filtering".
+ * calls out — category, brand, vehicle make/model.
+ *
+ * Reads `q` and `categorySlug` from the URL on load so the landing page's
+ * hero search and category cards can hand off directly into a pre-filtered
+ * result set, rather than landing here empty and making the customer
+ * re-type what they already told the hero.
  */
 export function BrowsePage() {
-  const [q, setQ] = useState('');
-  const [categorySlug, setCategorySlug] = useState('');
+  const [searchParams] = useSearchParams();
+  const [q, setQ] = useState(searchParams.get('q') ?? '');
+  const [categorySlug, setCategorySlug] = useState(searchParams.get('categorySlug') ?? '');
   const [brandId, setBrandId] = useState('');
   const [vehicleMake, setVehicleMake] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
@@ -51,14 +63,18 @@ export function BrowsePage() {
     setOffset(0);
   }
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="text-2xl font-semibold text-slate-900">Browse parts</h1>
+  const inputClass =
+    'mt-1 w-full rounded-sm border border-muted/40 bg-white px-3 py-2 text-sm text-graphite focus:border-safety focus:outline-none';
+  const labelClass = 'block text-sm font-medium text-graphite';
 
-      <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-[240px_1fr]">
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-10">
+      <h1 className="font-display text-3xl font-bold tracking-tight text-graphite">Browse parts</h1>
+
+      <div className="mt-6 grid grid-cols-1 gap-8 md:grid-cols-[240px_1fr]">
         <aside className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700" htmlFor="q">
+            <label className={labelClass} htmlFor="q">
               Search
             </label>
             <input
@@ -70,12 +86,12 @@ export function BrowsePage() {
                 resetToFirstPage();
               }}
               placeholder="Name or part number"
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              className={`${inputClass} font-mono`}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700" htmlFor="category">
+            <label className={labelClass} htmlFor="category">
               Category
             </label>
             <select
@@ -85,7 +101,7 @@ export function BrowsePage() {
                 setCategorySlug(e.target.value);
                 resetToFirstPage();
               }}
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              className={inputClass}
             >
               <option value="">All categories</option>
               {categoriesQuery.data?.map((c) => (
@@ -97,7 +113,7 @@ export function BrowsePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700" htmlFor="brand">
+            <label className={labelClass} htmlFor="brand">
               Brand
             </label>
             <select
@@ -107,7 +123,7 @@ export function BrowsePage() {
                 setBrandId(e.target.value);
                 resetToFirstPage();
               }}
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              className={inputClass}
             >
               <option value="">All brands</option>
               {brandsQuery.data?.map((b) => (
@@ -119,7 +135,7 @@ export function BrowsePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700" htmlFor="vehicleMake">
+            <label className={labelClass} htmlFor="vehicleMake">
               Vehicle make
             </label>
             <select
@@ -130,7 +146,7 @@ export function BrowsePage() {
                 setVehicleModel('');
                 resetToFirstPage();
               }}
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              className={inputClass}
             >
               <option value="">Any make</option>
               {[...new Set((vehiclesQuery.data ?? []).map((v) => v.make))].sort().map((make) => (
@@ -142,7 +158,7 @@ export function BrowsePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700" htmlFor="vehicleModel">
+            <label className={labelClass} htmlFor="vehicleModel">
               Vehicle model
             </label>
             <select
@@ -153,7 +169,7 @@ export function BrowsePage() {
                 resetToFirstPage();
               }}
               disabled={vehicleMake === ''}
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+              className={`${inputClass} disabled:bg-chalk disabled:text-muted`}
             >
               <option value="">Any model</option>
               {modelsForMake.map((model) => (
@@ -166,30 +182,34 @@ export function BrowsePage() {
         </aside>
 
         <main>
-          {partsQuery.isLoading && <p className="text-slate-500">Loading…</p>}
+          {partsQuery.isLoading && <p className="text-muted">Loading…</p>}
           {partsQuery.isError && (
             <p className="text-red-600">Could not load parts. Is the backend running?</p>
           )}
 
           {partsQuery.data && (
             <>
-              <p className="mb-3 text-sm text-slate-500">{partsQuery.data.total} parts found</p>
+              <p className="mb-3 text-sm text-muted">{partsQuery.data.total} parts found</p>
 
-              <ul className="divide-y divide-slate-200 rounded border border-slate-200">
+              <ul className="divide-y divide-muted/20 rounded-sm border border-muted/30 bg-white">
                 {partsQuery.data.parts.map((part) => (
                   <li key={part.id}>
                     <Link
                       to={`/parts/${part.id}`}
-                      className="flex items-center justify-between px-4 py-3 hover:bg-slate-50"
+                      className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-chalk"
                     >
-                      <div>
-                        <p className="font-medium text-slate-900">{part.rawName}</p>
-                        <p className="text-sm text-slate-500">
-                          {part.brand?.name ?? 'Unknown brand'} · {part.partNumber ?? 'no code'} ·{' '}
-                          {part.category.name}
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-graphite">{part.rawName}</p>
+                        <p className="mt-1 flex items-center gap-2 text-sm text-muted">
+                          <span>{part.brand?.name ?? 'Unknown brand'}</span>
+                          {part.partNumber && <PartTag>{part.partNumber}</PartTag>}
+                          <span>{part.category.name}</span>
                         </p>
                       </div>
-                      <span className="text-xs uppercase tracking-wide text-slate-400">
+                      <span className="flex shrink-0 items-center gap-1.5 text-xs uppercase tracking-wide text-muted">
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${AVAILABILITY_DOT[part.availabilityStatus] ?? 'bg-muted'}`}
+                        />
                         {part.availabilityStatus.replace('_', ' ')}
                       </span>
                     </Link>
@@ -198,7 +218,7 @@ export function BrowsePage() {
               </ul>
 
               {partsQuery.data.parts.length === 0 && (
-                <p className="mt-4 text-slate-500">No parts match these filters.</p>
+                <p className="mt-4 text-muted">No parts match these filters.</p>
               )}
 
               <div className="mt-4 flex items-center justify-between">
@@ -206,7 +226,7 @@ export function BrowsePage() {
                   type="button"
                   disabled={offset === 0}
                   onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-                  className="rounded border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-40"
+                  className="rounded-sm border border-muted/40 px-3 py-1.5 text-sm text-graphite disabled:opacity-40"
                 >
                   Previous
                 </button>
@@ -214,7 +234,7 @@ export function BrowsePage() {
                   type="button"
                   disabled={offset + PAGE_SIZE >= partsQuery.data.total}
                   onClick={() => setOffset(offset + PAGE_SIZE)}
-                  className="rounded border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-40"
+                  className="rounded-sm border border-muted/40 px-3 py-1.5 text-sm text-graphite disabled:opacity-40"
                 >
                   Next
                 </button>

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
+import { PartTag } from '../components/PartTag';
 
 const AVAILABILITY_LABEL: Record<string, string> = {
   IN_STOCK: 'In stock',
@@ -27,14 +28,14 @@ export function PartDetailPage() {
   });
 
   if (partQuery.isLoading) {
-    return <p className="mx-auto max-w-3xl px-4 py-8 text-slate-500">Loading…</p>;
+    return <p className="mx-auto max-w-3xl px-4 py-10 text-muted">Loading…</p>;
   }
 
   if (partQuery.isError || !partQuery.data) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-10">
         <p className="text-red-600">Part not found.</p>
-        <Link to="/" className="mt-2 inline-block text-sm text-slate-600 underline">
+        <Link to="/browse" className="mt-2 inline-block text-sm text-graphite underline">
           Back to browse
         </Link>
       </div>
@@ -47,22 +48,25 @@ export function PartDetailPage() {
   );
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <Link to="/" className="text-sm text-slate-600 underline">
+    <div className="mx-auto max-w-3xl px-4 py-10">
+      <Link to="/browse" className="text-sm text-muted hover:text-safety">
         ← Back to browse
       </Link>
 
-      <h1 className="mt-2 text-2xl font-semibold text-slate-900">{part.rawName}</h1>
-      <p className="mt-1 text-slate-500">
-        {part.brand?.name ?? 'Unknown brand'} · {part.partNumber ?? 'no part number'} ·{' '}
-        {part.category.name}
+      <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-graphite">
+        {part.rawName}
+      </h1>
+      <p className="mt-2 flex flex-wrap items-center gap-2 text-muted">
+        <span>{part.brand?.name ?? 'Unknown brand'}</span>
+        {part.partNumber && <PartTag>{part.partNumber}</PartTag>}
+        <span>{part.category.name}</span>
       </p>
 
-      <div className="mt-4 inline-flex items-center gap-2 rounded bg-slate-100 px-3 py-1.5 text-sm">
-        <span className="font-medium text-slate-700">
+      <div className="mt-4 inline-flex items-center gap-2 rounded-sm border border-muted/30 bg-white px-3 py-1.5 text-sm">
+        <span className="font-medium text-graphite">
           {AVAILABILITY_LABEL[part.availabilityStatus] ?? part.availabilityStatus}
         </span>
-        <span className="text-slate-400">
+        <span className="text-muted">
           {part.lastVerifiedAt
             ? `verified ${new Date(part.lastVerifiedAt).toLocaleDateString()}`
             : 'never verified — confirm by phone'}
@@ -70,15 +74,15 @@ export function PartDetailPage() {
       </div>
 
       {attributeEntries.length > 0 && (
-        <section className="mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <section className="mt-8">
+          <h2 className="font-mono text-xs font-semibold uppercase tracking-widest text-muted">
             Parsed attributes
           </h2>
-          <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             {attributeEntries.map(([key, value]) => (
               <div key={key} className="contents">
-                <dt className="text-slate-500">{key}</dt>
-                <dd className="text-slate-900">{Array.isArray(value) ? value.join(', ') : String(value)}</dd>
+                <dt className="text-muted">{key}</dt>
+                <dd className="text-graphite">{Array.isArray(value) ? value.join(', ') : String(value)}</dd>
               </div>
             ))}
           </dl>
@@ -86,11 +90,11 @@ export function PartDetailPage() {
       )}
 
       {part.fitments.length > 0 && (
-        <section className="mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <section className="mt-8">
+          <h2 className="font-mono text-xs font-semibold uppercase tracking-widest text-muted">
             Fits these vehicles
           </h2>
-          <ul className="mt-2 space-y-1 text-sm text-slate-900">
+          <ul className="mt-3 space-y-1 text-sm text-graphite">
             {part.fitments.map((fitment) => (
               <li key={fitment.id}>
                 {fitment.vehicle.make} {fitment.vehicle.model}
