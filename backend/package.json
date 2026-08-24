@@ -14,10 +14,13 @@
     "db:logs": "docker compose -f ../docker-compose.yml logs -f db",
     "db:psql": "docker compose -f ../docker-compose.yml exec db psql -U lankaauto -d lankaauto",
     "db:studio": "prisma studio",
-    "migrate": "prisma migrate dev",
+    "migrate": "prisma migrate dev --create-only",
     "db:reset": "prisma migrate reset --force",
     "generate": "prisma generate",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:db": "tsx src/scripts/check-db.ts",
+    "db:verify": "npm run db:reset && npm run check:db",
+    "migrate:apply": "prisma migrate deploy && npm run check:db"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
