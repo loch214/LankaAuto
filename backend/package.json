@@ -19,6 +19,7 @@
     "generate": "prisma generate",
     "typecheck": "tsc --noEmit",
     "check:db": "tsx src/scripts/check-db.ts",
+    "ingest:gmb-ujoint": "tsx src/scripts/ingest-gmb-ujoint.ts",
     "db:verify": "npm run db:reset && npm run check:db",
     "migrate:apply": "prisma migrate deploy && npm run check:db",
     "test": "vitest run",
