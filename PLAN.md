@@ -77,8 +77,12 @@ These encode part type, make, model, chassis code, and position — but inconsis
 **Pipeline (batch job, not runtime — and re-run often, so it must be idempotent):**
 
 1. **Load** raw price-list rows (CSV export) into a `staging_rows` table **verbatim**, tagged with a run id. Nothing is parsed yet. This makes the run resumable — a crash at row 800 shouldn't cost 800 LLM calls — and preserves columns the domain model drops, such as price.
-2. **Normalize** — uppercase, collapse whitespace, strip punctuation noise, expand known abbreviations (`FR` → `FRONT`, `R/H` → `RIGHT`). A pure function, unit tested.
-3. **Rule-based extraction** — match against a checked-in lexicon of makes, models, chassis-code patterns, positions, and part types, hand-built by inspecting the distinct tokens in the real data. Record *which* rule fired for each field.
+2. **Normalize** — uppercase, collapse whitespace, expand known abbreviations (`FR` → `FRONT`, `R/H` → `RIGHT`). A pure function, unit tested.
+
+   ⚠️ **"Strip punctuation noise" was wrong and has been removed.** Punctuation in the real data is load-bearing: `T/ACE` (Toyoace), `L/ACE` (Liteace), `D/CAB` (double cab) and the part code `GU 7280/4` all contain a slash that must survive, while `CORONA/CARINA` and `B210/B310` must split on it. There is no context-free rule. See `backend/docs/01-source-profile-gmb-ujoint.md` §6.
+3. **Rule-based extraction** — match against a checked-in lexicon, hand-built by inspecting the distinct tokens in the real data. Record *which* rule fired for each field.
+
+   The lexicon is **typed**, not a flat token list: one source column mixes model names, chassis codes, engine codes, body styles and product types (`DYNA 15B/SO5C/JO5C` is model + three engine codes; `4M40/INTECOOLER` has no model at all). The extractor emits **typed spans**. It also **matches longest-first and splits only the residue** — splitting before lookup destroys `T/ACE`. Entries carry misspelling aliases (`HI-LUC` → `HILUX`), since the same file spells one model two ways.
 4. **LLM fallback — on the unparsed residue only.** Batched (~20 rows per call), strict JSON schema output, cached by normalized-string hash so re-runs are free.
 5. Store the **original raw name** (never discard it — it's the source of truth and gets cited) alongside the **parsed attributes**, upserted by `source_key`.
 6. Derive `vehicles` and `part_fitments` from the parsed make / model / chassis code.
@@ -198,7 +202,13 @@ Nothing in this plan produces that content. Building the table, the embedding pa
    → Semantic/vector search over `part_embeddings`. This is the core RAG path — matches "front brake pads for a 2015 Vitz" against `BRAKE PAD SET TOYOTA VITZ KSP130 FR` despite almost no shared words
 
 3. **`check_fitment(part_id, vehicle_id)`**
-   → Compares part attributes vs vehicle attributes, returns match/no-match + which attributes matched, plus any retrieved fitment notes
+   → Looks up asserted `part_fitments`. Returns match / no-match / **ambiguous**, which attributes matched, and any retrieved fitment notes.
+
+   **The `vehicle → part` direction is one-to-many, and the data cannot always narrow it.** Confirmed against the GMB U-joint list (`backend/docs/01-source-profile-gmb-ujoint.md` §9): three distinct parts — `GUM 75`, `GUM 87`, `GUM 93` — all carry the fitment `MITSUBISHI CANTER,ROSA`, at prices differing by 30%. They are genuinely different joints, distinguished by cross diameter × cap length, and **those dimensions are not in the source data**. Neither is a year range.
+
+   This is correct data, not dirty data, so no amount of parser work fixes it. The tool must therefore be able to return **several candidates plus a statement of what would disambiguate them** — *"three U-joints are listed for the Canter; they differ by size, which this price list doesn't record. Please confirm with the shop, or measure the old joint."* Collapsing that to a single confident answer would be a fabrication.
+
+   Do not design the tool signature, the agent prompt, or the UI around a single-part return.
 
 4. **`find_cross_references(part_id)`** — ❌ **BLOCKED**
    → Returns equivalent parts across brands (OEM ↔ aftermarket, alternative brands)
@@ -320,7 +330,10 @@ Every answer cites its source: the `raw_name` of the matched part, the attribute
 | Decision | Choice | Why it's hard to reverse |
 |---|---|---|
 | Embedding model | Gemini, **768 dims** | Dimension is fixed in the migration; changing it means a migration plus a full re-embed |
-| Price | **Out of scope** in the domain model | Raw CSV rows kept in staging, so it's a backfill if that changes |
+| Price | Not shown to customers. **Stored verbatim as printed**, plus `price_as_of` from the price-list date | Amended 2026-08-24: capturing the date is a column now, a backfill later |
+| Discount rules | **File-level metadata**, applied by business logic at display — never baked into the stored value | Baking it in would be unrecoverable |
+| `source_key` | `(brand, normalized_code)` — **never** derived from parsed fields | Verified: 62/62 distinct on the GMB list; `(make, model, type)` is *not* unique |
+| PDF ingestion | Extract **table cells**, never the flattened text line | A flattened row with a blank make silently mis-assigns the next token |
 | Local Postgres | Docker Compose, `pgvector/pgvector:pg16`, port 5433 | — |
 | `part_fitments` | **In Phase 1** | Deriving it later means backfilling every part |
 | `cross_references` | **Cut** pending the data question | — |
@@ -331,9 +344,14 @@ Every answer cites its source: the `raw_name` of the matched part, the attribute
 ### Open questions — ask Dad / Uncle
 
 1. **Does any written cross-reference list exist (OEM ↔ aftermarket), or is it all in your heads?** — *highest priority; determines the shape of agent tool 4 and the whole of Phase 8*
-2. Does the price list have a **brand column**, or is brand buried in the name string / implied by the file?
-3. Do any rows list **multiple models** (`COROLLA AE100/AE110`)? Determines whether the parser emits one fitment per row or many.
-4. What **date** is the current price list? Used as the initial `last_verified_at`, so day-one freshness reads *"from the July price list"* rather than *"never verified"* across the entire catalogue.
+2. **Is the 25% discount universal, or customer-tier-specific?** Page 2 of the GMB list reads `** CREDIT LESS 25% - CASH LESS 25% **`. Commercial question, not an engineering one — the storage layering (above) keeps both answers open, so this does not block.
+3. **Is there a size spec anywhere for U-joints (cross diameter × cap length)?** Without it, three parts fitting "Canter" cannot be told apart — see agent tool 3. A catalogue, a supplier sheet, or is it measured by hand at the counter?
+
+*Answered 2026-08-24 by the GMB U-joint list — retained so the answers don't get re-asked:*
+
+- ~~Does the price list have a **brand column**?~~ → **No.** Brand is file-level (`GMB`), and the header also names the *supplier* (Lakshman Motor House) — two different entities, do not conflate. Note **part type is not** file-level: 3 of 62 rows in a file titled `U/JOINT` are steering joints.
+- ~~Do any rows list **multiple models**?~~ → **Yes**, and worse than expected: multiple models, chassis codes and engine codes, separated inconsistently by comma, slash *and* bare space. The parser emits many fitments per row.
+- ~~What **date** is the current price list?~~ → `2024-07-26` for the GMB list. Per-file, so it is a column on the ingest run, not a constant. Also ~2 years stale, which is itself worth knowing.
 
 ### Known, unresolved, not blocking Phase 1
 

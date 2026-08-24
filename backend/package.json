@@ -20,16 +20,20 @@
     "typecheck": "tsc --noEmit",
     "check:db": "tsx src/scripts/check-db.ts",
     "db:verify": "npm run db:reset && npm run check:db",
-    "migrate:apply": "prisma migrate deploy && npm run check:db"
+    "migrate:apply": "prisma migrate deploy && npm run check:db",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
     "dotenv": "^16.4.7"
   },
   "devDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "^1.2.5",
     "@types/node": "^22.10.5",
     "prisma": "^6.1.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
   }
 }
