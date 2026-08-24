@@ -1,12 +1,16 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { buildPartSearchWhere } from '../services/part-search.js';
+import { buildPartWhere } from '../services/part-search.js';
 
 export const partsRouter = Router();
 
 const listQuerySchema = z.object({
   q: z.string().max(200).optional(),
+  categorySlug: z.string().max(200).optional(),
+  brandId: z.uuid().optional(),
+  vehicleMake: z.string().max(200).optional(),
+  vehicleModel: z.string().max(200).optional(),
   // Page size is capped, not just defaulted — an unbounded `limit` from a
   // query string is a cheap way to make one request do the work of a
   // thousand.
@@ -15,17 +19,19 @@ const listQuerySchema = z.object({
 });
 
 /**
- * GET /parts?q=&limit=&offset=
+ * GET /parts?q=&categorySlug=&brandId=&vehicleMake=&vehicleModel=&limit=&offset=
  *
- * Plain substring search over name and part number — see
- * `part-search.ts` for why there are two branches. Deliberately NOT semantic
- * search; embeddings are Phase 3 (PLAN.md §10), and reaching for pgvector
- * here would be solving a problem this endpoint doesn't have yet.
+ * Free-text search plus the browse-page filters from PLAN.md §8 (category,
+ * brand, vehicle make/model) — see `buildPartWhere` for how they combine.
+ * Deliberately NOT semantic search; embeddings are Phase 3 (PLAN.md §10),
+ * and reaching for pgvector here would be solving a problem this endpoint
+ * doesn't have yet.
  */
 partsRouter.get('/', async (req, res, next) => {
   try {
-    const { q, limit, offset } = listQuerySchema.parse(req.query);
-    const where = buildPartSearchWhere(q);
+    const { q, categorySlug, brandId, vehicleMake, vehicleModel, limit, offset } =
+      listQuerySchema.parse(req.query);
+    const where = buildPartWhere({ q, categorySlug, brandId, vehicleMake, vehicleModel });
 
     const [parts, total] = await Promise.all([
       prisma.part.findMany({

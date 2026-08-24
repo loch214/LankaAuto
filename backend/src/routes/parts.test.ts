@@ -62,6 +62,42 @@ describe('GET /parts', () => {
     const ids2 = page2.body.parts.map((p: { id: string }) => p.id);
     expect(ids1.some((id: string) => ids2.includes(id))).toBe(false);
   });
+
+  it('filters by categorySlug, excluding the other category', async () => {
+    const res = await request.get('/parts').query({ categorySlug: 'steering-joints' });
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBeGreaterThan(0);
+    for (const part of res.body.parts) {
+      expect(part.category.slug).toBe('steering-joints');
+    }
+  });
+
+  it('filters by brandId', async () => {
+    const brand = await prisma.brand.findFirstOrThrow({ where: { name: 'GMB' } });
+    const res = await request.get('/parts').query({ brandId: brand.id });
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(await prisma.part.count({ where: { brandId: brand.id } }));
+  });
+
+  it('filters by vehicleMake and vehicleModel together, matching only that vehicle', async () => {
+    const res = await request.get('/parts').query({ vehicleMake: 'toyota', vehicleModel: 'hiace' });
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBeGreaterThan(0);
+
+    const expected = await prisma.part.count({
+      where: { fitments: { some: { vehicle: { make: 'TOYOTA', model: 'HIACE' } } } },
+    });
+    expect(res.body.total).toBe(expected);
+  });
+
+  it('combines a category filter with q using AND, not OR', async () => {
+    // "hiace" only appears under u-joints in the seeded data, so asking for
+    // steering-joints + hiace should return nothing — proving the two
+    // filters are ANDed, not OR'd into a broader match.
+    const res = await request.get('/parts').query({ categorySlug: 'steering-joints', q: 'hiace' });
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(0);
+  });
 });
 
 describe('GET /parts/:id', () => {

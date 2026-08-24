@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { escapeLikePattern, buildPartSearchWhere } from './part-search.js';
+import { escapeLikePattern, buildPartSearchWhere, buildPartWhere } from './part-search.js';
 
 describe('escapeLikePattern', () => {
   // The bug this exists to prevent: Prisma's `contains` interpolates the term
@@ -51,5 +51,46 @@ describe('buildPartSearchWhere', () => {
       { normalizedName: { contains: '\\%' } },
       { partNumber: { contains: '\\%' } },
     ]);
+  });
+});
+
+describe('buildPartWhere', () => {
+  it('returns an empty filter when nothing is set', () => {
+    expect(buildPartWhere({})).toEqual({});
+  });
+
+  it('AND-combines q with a category filter, not OR — both must hold', () => {
+    const where = buildPartWhere({ q: 'hiace', categorySlug: 'u-joints' });
+    expect(where.AND).toContainEqual({ category: { slug: 'u-joints' } });
+    expect(where.AND).toContainEqual({
+      OR: [
+        { normalizedName: { contains: 'HIACE' } },
+        { partNumber: { contains: 'HIACE' } },
+      ],
+    });
+  });
+
+  it('filters by brandId directly', () => {
+    const where = buildPartWhere({ brandId: 'brand-1' });
+    expect(where.AND).toContainEqual({ brandId: 'brand-1' });
+  });
+
+  it('filters by vehicle make and model via the fitments join, uppercased', () => {
+    const where = buildPartWhere({ vehicleMake: 'toyota', vehicleModel: 'hiace' });
+    expect(where.AND).toContainEqual({
+      fitments: { some: { vehicle: { make: 'TOYOTA', model: 'HIACE' } } },
+    });
+  });
+
+  it('allows vehicle make alone, without requiring a model', () => {
+    const where = buildPartWhere({ vehicleMake: 'toyota' });
+    expect(where.AND).toContainEqual({
+      fitments: { some: { vehicle: { make: 'TOYOTA' } } },
+    });
+  });
+
+  it('does not add an empty category/brand/vehicle condition when only q is set', () => {
+    const where = buildPartWhere({ q: 'hiace' });
+    expect(where.AND).toHaveLength(1);
   });
 });

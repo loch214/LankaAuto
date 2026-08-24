@@ -28,12 +28,14 @@
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
+    "cors": "^2.8.6",
     "dotenv": "^16.4.7",
     "express": "^5.2.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@rolldown/binding-win32-x64-msvc": "^1.2.5",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^22.10.5",
     "@types/supertest": "^7.2.1",

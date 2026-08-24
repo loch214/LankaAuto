@@ -48,3 +48,64 @@ export function buildPartSearchWhere(q: string | undefined): Prisma.PartWhereInp
     ],
   };
 }
+
+/** Filters accepted by the browse UI, in addition to the free-text `q`. */
+export interface PartFilterParams {
+  q?: string | undefined;
+  categorySlug?: string | undefined;
+  brandId?: string | undefined;
+  vehicleMake?: string | undefined;
+  vehicleModel?: string | undefined;
+}
+
+/**
+ * Combines the free-text search with the browse-page filters (PLAN.md §8:
+ * "filter by category → sub-category, by brand, by vehicle make/model").
+ *
+ * Each filter is AND'd in only when present, so an unset filter is absent
+ * from the query rather than compared against `undefined` — Prisma treats a
+ * present-but-undefined key as "no filter", which is correct, but building
+ * the array conditionally keeps that behaviour explicit rather than relying
+ * on it silently.
+ *
+ * Vehicle make/model match against `Vehicle.make`/`Vehicle.model` through a
+ * `fitments.some` join, uppercased to match how ingestion stored them
+ * (`ingest-gmb-ujoint.ts` always writes `row.make` and the lexicon's
+ * `canonical` form, both already uppercase) — this is an exact filter fed by
+ * dropdown options the server itself provides via `GET /vehicles`, not a
+ * fuzzy text field, so `equals` rather than `contains` is the right match.
+ */
+export function buildPartWhere(params: PartFilterParams): Prisma.PartWhereInput {
+  const conditions: Prisma.PartWhereInput[] = [];
+
+  const searchWhere = buildPartSearchWhere(params.q);
+  if (Object.keys(searchWhere).length > 0) conditions.push(searchWhere);
+
+  if (params.categorySlug !== undefined) {
+    conditions.push({ category: { slug: params.categorySlug } });
+  }
+
+  if (params.brandId !== undefined) {
+    conditions.push({ brandId: params.brandId });
+  }
+
+  if (params.vehicleMake !== undefined || params.vehicleModel !== undefined) {
+    conditions.push({
+      fitments: {
+        some: {
+          vehicle: {
+            ...(params.vehicleMake !== undefined
+              ? { make: params.vehicleMake.trim().toUpperCase() }
+              : {}),
+            ...(params.vehicleModel !== undefined
+              ? { model: params.vehicleModel.trim().toUpperCase() }
+              : {}),
+          },
+        },
+      },
+    });
+  }
+
+  if (conditions.length === 0) return {};
+  return { AND: conditions };
+}

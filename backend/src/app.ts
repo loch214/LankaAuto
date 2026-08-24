@@ -1,5 +1,9 @@
 import express from 'express';
+import cors from 'cors';
 import { partsRouter } from './routes/parts.js';
+import { categoriesRouter } from './routes/categories.js';
+import { brandsRouter } from './routes/brands.js';
+import { vehiclesRouter } from './routes/vehicles.js';
 import { errorHandler } from './middleware/error-handler.js';
 
 /**
@@ -14,11 +18,20 @@ import { errorHandler } from './middleware/error-handler.js';
 export function createApp() {
   const app = express();
 
+  // Open CORS: this is a public, unauthenticated, read-only catalogue API —
+  // there is no session or credential a cross-origin request could steal.
+  // Revisit when the staff routes (Phase 6, JWT-gated) land, since those
+  // will need the real frontend origin, not a wildcard.
+  app.use(cors());
+
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
   });
 
   app.use('/parts', partsRouter);
+  app.use('/categories', categoriesRouter);
+  app.use('/brands', brandsRouter);
+  app.use('/vehicles', vehiclesRouter);
 
   app.use(errorHandler);
 
