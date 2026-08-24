@@ -58,6 +58,13 @@ data/*.xlsx
 *.cache.json
 
 # ---------------------------------------------------------------------------
+# Agent handoff notes
+# ---------------------------------------------------------------------------
+# Session-to-session working notes for AI coding agents, not project
+# documentation — PLAN.md and git history are the durable record.
+HANDOFF.md
+
+# ---------------------------------------------------------------------------
 # Logs and test output
 # ---------------------------------------------------------------------------
 *.log

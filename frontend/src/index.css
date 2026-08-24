@@ -33,3 +33,21 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Hazard-tape corner accent — the hero's one loud gesture, used exactly once. */
+.hazard-stripe {
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--color-signal) 0px,
+    var(--color-signal) 10px,
+    var(--color-graphite) 10px,
+    var(--color-graphite) 20px
+  );
+}
+
+/* Pegboard texture for the footer — reads as the back wall of the shop. */
+.pegboard {
+  background-image: radial-gradient(var(--color-chalk) 1px, transparent 1px);
+  background-size: 18px 18px;
+  background-position: -9px -9px;
+}

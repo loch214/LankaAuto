@@ -6,8 +6,10 @@ import { PartTag } from '../components/PartTag';
 
 /**
  * The customer-facing landing page — PLAN.md §8: hero, what the shop
- * stocks, brands carried, contact/location/hours. Distinct from `/browse`,
- * which is the working search-and-filter tool this page hands off to.
+ * stocks, brands carried. Contact/location/hours live in the footer
+ * (`Layout.tsx`) so they're on every page, not just this one. Distinct
+ * from `/browse`, which is the working search-and-filter tool this page
+ * hands off to rather than duplicates.
  */
 export function LandingPage() {
   const navigate = useNavigate();
@@ -27,8 +29,10 @@ export function LandingPage() {
   return (
     <div>
       {/* Hero */}
-      <section className="bg-graphite">
-        <div className="mx-auto max-w-6xl px-4 py-20 sm:py-28">
+      <section className="relative overflow-hidden bg-graphite">
+        <div className="hazard-stripe pointer-events-none absolute -right-24 -top-24 size-72 rotate-6 opacity-[0.07]" />
+
+        <div className="relative mx-auto max-w-6xl px-4 py-20 sm:py-28">
           <p className="font-mono text-sm tracking-widest text-safety">GMB CERTIFIED STOCK · SRI LANKA</p>
           <h1 className="mt-4 max-w-3xl font-display text-5xl font-extrabold leading-[0.95] tracking-tight text-chalk sm:text-7xl">
             PARTS THAT FIT.
@@ -40,23 +44,38 @@ export function LandingPage() {
             what fits — and say so plainly when a price list can&rsquo;t settle it alone.
           </p>
 
-          <form onSubmit={submitHeroSearch} className="mt-8 flex max-w-lg gap-2">
+          <div className="mt-8 flex flex-wrap items-center gap-4">
+            <Link
+              to="/browse"
+              className="rounded-sm bg-safety px-6 py-3 text-sm font-semibold text-graphite transition-colors hover:bg-signal"
+            >
+              Browse the catalogue
+            </Link>
+            <a
+              href="tel:+94771234567"
+              className="rounded-sm border border-chalk/25 px-6 py-3 text-sm font-semibold text-chalk transition-colors hover:border-safety hover:text-safety"
+            >
+              Call the counter
+            </a>
+          </div>
+
+          <form onSubmit={submitHeroSearch} className="mt-10 flex max-w-lg gap-2">
             <input
               type="text"
               value={heroQuery}
               onChange={(e) => setHeroQuery(e.target.value)}
-              placeholder="Try “GUT12” or “Hiace joint”"
+              placeholder="Or search a part number — try “GUT12”"
               className="w-full rounded-sm border border-muted/40 bg-steel px-4 py-3 font-mono text-sm text-chalk placeholder:text-muted focus:border-safety focus:outline-none"
             />
             <button
               type="submit"
-              className="whitespace-nowrap rounded-sm bg-safety px-5 py-3 text-sm font-semibold text-graphite transition-colors hover:bg-signal"
+              className="whitespace-nowrap rounded-sm border border-muted/40 px-5 py-3 text-sm font-semibold text-chalk transition-colors hover:border-safety hover:text-safety"
             >
               Find it
             </button>
           </form>
 
-          <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm text-muted">
+          <div className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-chalk/10 pt-8 text-sm text-muted">
             <span>
               <span className="font-display text-2xl text-chalk">
                 {categoriesQuery.data?.length ?? '—'}
@@ -75,35 +94,49 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* What we stock */}
-      <section className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="font-display text-3xl font-bold tracking-tight text-graphite">What we stock</h2>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          {categoriesQuery.data?.map((category) => (
-            <Link
-              key={category.id}
-              to={`/browse?categorySlug=${category.slug}`}
-              className="group rounded-sm border border-muted/30 bg-white p-6 transition-colors hover:border-safety"
-            >
-              <p className="font-display text-2xl font-bold text-graphite group-hover:text-safety">
-                {category.name}
-              </p>
-              <p className="mt-1 text-sm text-muted">Browse the full range →</p>
-            </Link>
-          ))}
-          {categoriesQuery.data?.length === 0 && (
-            <p className="text-muted">Catalogue is being loaded — check back shortly.</p>
-          )}
+      {/* What we stock — categories hung off a rail, like bins on a shop shelf */}
+      <section className="mx-auto max-w-6xl px-4 py-20">
+        <p className="font-mono text-xs uppercase tracking-widest text-muted">Browse by category</p>
+        <h2 className="mt-2 font-display text-3xl font-bold tracking-tight text-graphite sm:text-4xl">
+          What&rsquo;s on the shelf
+        </h2>
+
+        <div className="mt-10 border-t-4 border-steel">
+          <div className="flex flex-wrap gap-x-8 gap-y-10 pt-1">
+            {categoriesQuery.data?.map((category, i) => (
+              <Link
+                key={category.id}
+                to={`/browse?categorySlug=${category.slug}`}
+                className={`group flex flex-col items-start transition-transform duration-150 hover:rotate-0 hover:-translate-y-0.5 ${
+                  i % 2 === 0 ? '-rotate-1' : 'rotate-1'
+                }`}
+              >
+                <span className="h-4 w-px bg-muted/50" />
+                <span className="rounded-sm border-l-2 border-safety bg-white px-4 py-3 shadow-sm">
+                  <span className="block font-display text-xl font-bold leading-none text-graphite group-hover:text-safety">
+                    {category.name}
+                  </span>
+                  <span className="mt-1.5 block font-mono text-[11px] tracking-wide text-muted">
+                    View range →
+                  </span>
+                </span>
+              </Link>
+            ))}
+            {categoriesQuery.data?.length === 0 && (
+              <p className="pb-2 text-muted">Catalogue is being loaded — check back shortly.</p>
+            )}
+          </div>
         </div>
       </section>
 
       {/* Brands */}
       <section className="bg-steel/5">
         <div className="mx-auto max-w-6xl px-4 py-16">
-          <h2 className="font-display text-3xl font-bold tracking-tight text-graphite">
+          <p className="font-mono text-xs uppercase tracking-widest text-muted">Approved suppliers</p>
+          <h2 className="mt-2 font-display text-3xl font-bold tracking-tight text-graphite sm:text-4xl">
             Brands we carry
           </h2>
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-8 flex flex-wrap gap-3">
             {brandsQuery.data?.map((brand) => (
               <span
                 key={brand.id}
@@ -113,25 +146,6 @@ export function LandingPage() {
                 {brand.country && <span className="ml-2 text-xs font-sans font-normal text-muted">{brand.country}</span>}
               </span>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Visit us */}
-      <section id="visit" className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="font-display text-3xl font-bold tracking-tight text-graphite">Visit us</h2>
-        <div className="mt-6 grid gap-6 sm:grid-cols-3">
-          <div className="rounded-sm border-l-2 border-safety bg-white p-6">
-            <p className="font-mono text-xs uppercase tracking-widest text-muted">Address</p>
-            <p className="mt-2 text-graphite">Details coming soon</p>
-          </div>
-          <div className="rounded-sm border-l-2 border-safety bg-white p-6">
-            <p className="font-mono text-xs uppercase tracking-widest text-muted">Hours</p>
-            <p className="mt-2 text-graphite">Details coming soon</p>
-          </div>
-          <div className="rounded-sm border-l-2 border-safety bg-white p-6">
-            <p className="font-mono text-xs uppercase tracking-widest text-muted">Phone</p>
-            <p className="mt-2 text-graphite">Details coming soon</p>
           </div>
         </div>
       </section>
