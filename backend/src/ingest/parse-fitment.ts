@@ -17,12 +17,21 @@ interface Surface {
 /**
  * All lexicon surface forms, longest first.
  *
- * The ordering is the whole trick. `T/ACE` and `CORONA/CARINA` cannot be told
- * apart by any rule about the slash character — one is a name, the other is a
- * separator between two names. Matching the longest known surface form before
- * splitting resolves both without a special case: `T/ACE` matches as a unit,
- * while `CORONA/CARINA` has no entry, so `CORONA` matches and the slash falls
- * through to the splitter.
+ * `T/ACE` and `CORONA/CARINA` cannot be told apart by any rule about the
+ * slash character — one is a name, the other is a separator between two
+ * names. What resolves both is `T/ACE` being a registered surface form that
+ * `isBoundary` matches as a whole, while `CORONA/CARINA` has no such entry,
+ * so `CORONA` matches alone and the slash falls through to the splitter.
+ *
+ * The length sort here is NOT what that distinction rests on — `isBoundary`
+ * already rejects a shorter match that doesn't end on a separator (`ELF`
+ * cannot match inside `ELF150`, sorted or not, because the char after it is
+ * `1`). The sort earns its keep in the narrower case of two DIFFERENT-length
+ * surfaces that are BOTH boundary-valid from the same start position — e.g.
+ * a future lexicon with both a standalone `STEERING` entry and
+ * `STEERING JOINT`, where the space after `STEERING` is itself a boundary.
+ * Not exercised by the current corpus; kept as the correct general rule
+ * rather than something narrower that happens to work today.
  */
 const SURFACES: readonly Surface[] = LEXICON.flatMap((entry) =>
   entry.surfaces.map((surface) => ({
