@@ -1,0 +1,401 @@
+// LankaAuto — database schema
+//
+// Scope note: `cross_references` and `part_documents` from PLAN.md §6 are
+// deliberately absent. Both are blocked on data that may not exist. See
+// PLAN.md §12 before adding either.
+
+generator client {
+  provider        = "prisma-client-js"
+  // postgresqlExtensions is still a preview feature. It is what allows the
+  // `extensions` line in the datasource block below.
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  // Lets Prisma emit `CREATE EXTENSION vector` into the migration itself, so
+  // the shadow database gets it too. Hand-writing that line works for the
+  // real database but is easy to forget for the shadow one — which is where
+  // the confusing "type vector does not exist" error comes from.
+  extensions = [vector]
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum AvailabilityStatus {
+  IN_STOCK
+  LOW
+  OUT_OF_STOCK
+  UNVERIFIED
+}
+
+/// How a part's availability was last established. Seeding from a price list
+/// is weaker evidence than a human checking the shelf, and the UI says so.
+enum VerificationSource {
+  PRICE_LIST
+  STAFF
+}
+
+/// Which stage of the ingestion pipeline produced a part's parsed attributes.
+/// This is what `parseConfidence` is derived from — never the LLM's own
+/// self-reported confidence, which is not calibrated.
+enum ParseSource {
+  LEXICON
+  LLM
+  MANUAL
+}
+
+enum FitmentSource {
+  INGESTED
+  STAFF
+}
+
+enum UserRole {
+  STAFF
+  ADMIN
+}
+
+enum IngestionStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue
+// ---------------------------------------------------------------------------
+
+model Category {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique
+  /// URL-safe form, e.g. "brake-pads". Public catalogue routes use this
+  /// rather than the uuid, so links stay readable and stable if renamed.
+  slug String @unique
+
+  /// Self-relation for sub-categories. onDelete: Restrict — deleting a
+  /// category that still has children should fail loudly, not silently
+  /// orphan or cascade away half the catalogue.
+  parentId String?    @map("parent_id") @db.Uuid
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children Category[] @relation("CategoryTree")
+
+  /// Declares which attribute keys parts in this category carry.
+  /// UNENFORCED for now — see PLAN.md §12. Documentation until something
+  /// validates against it.
+  attributeSchema Json? @map("attribute_schema")
+
+  /// Drives the rotating-verification nudges (PLAN.md §5).
+  verificationIntervalDays Int @default(30) @map("verification_interval_days")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  parts Part[]
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+model Brand {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique
+
+  /// Uppercased, whitespace-collapsed form used to match brands during
+  /// ingestion. "Aisin", "AISIN " and "aisin" must resolve to one row, and a
+  /// unique index on the raw name would not achieve that.
+  normalizedName String @unique @map("normalized_name")
+
+  isOem   Boolean @default(false) @map("is_oem")
+  country String?
+  notes   String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  parts Part[]
+
+  @@map("brands")
+}
+
+model Part {
+  id String @id @default(uuid()) @db.Uuid
+
+  categoryId String   @map("category_id") @db.Uuid
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  /// Nullable: a price-list row does not always name a brand, and inventing
+  /// one would corrupt the data. Unknown brand is a real, representable state.
+  brandId String? @map("brand_id") @db.Uuid
+  brand   Brand?  @relation(fields: [brandId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  /// The original price-list string, never modified. Source of truth, and
+  /// what the agent cites.
+  rawName String @map("raw_name")
+
+  /// Uppercased / whitespace-collapsed rawName. Stored rather than computed
+  /// per query so it can be indexed for fuzzy lookup in Phase 3.
+  normalizedName String @map("normalized_name")
+
+  /// NOT globally unique — the same number recurs across brands. No unique
+  /// constraint until the real data has been inspected (PLAN.md §6).
+  partNumber String? @map("part_number")
+
+  /// Parsed values: part_type, make, model, chassis_code, position, ...
+  /// Shape is per-category and governed by Category.attributeSchema.
+  attributes Json @default("{}")
+
+  availabilityStatus AvailabilityStatus  @default(UNVERIFIED) @map("availability_status")
+  lastVerifiedAt     DateTime?           @map("last_verified_at") @db.Timestamptz(3)
+  verifiedSource     VerificationSource? @map("verified_source")
+
+  location String?
+
+  /// Derived from parseSource, not self-reported by the LLM.
+  parseConfidence Float       @map("parse_confidence")
+  parseSource     ParseSource @map("parse_source")
+
+  /// Set when parseConfidence is below threshold or a required field is
+  /// missing. Drives the Phase 9 parse-review screen.
+  needsReview Boolean @default(false) @map("needs_review")
+
+  /// Idempotency key: sha256(sourceFile + normalizedName + brand).
+  /// Ingestion UPSERTS on this. Without it, re-running the pipeline after a
+  /// parser fix silently doubles the catalogue.
+  sourceKey String @unique @map("source_key")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  fitments         PartFitment[]
+  embeddings       PartEmbedding[]
+  verificationLogs VerificationLog[]
+  stagingRows      StagingRow[]
+
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([partNumber])
+  @@index([needsReview])
+  @@index([availabilityStatus, lastVerifiedAt])
+  /// GIN index for attribute filtering in the Phase 2 browse UI.
+  ///
+  /// jsonb_path_ops rather than the default jsonb_ops: about half the index
+  /// size and faster, at the cost of supporting only the containment
+  /// operator `@>`. Containment is exactly what attribute filtering does, so
+  /// the tradeoff costs nothing here.
+  ///
+  /// Declared here rather than in hand-written SQL because Prisma CAN express
+  /// it — anything Prisma can express should stay under Prisma's management,
+  /// or it shows up as schema drift forever.
+  @@index([attributes(ops: JsonbPathOps)], type: Gin)
+  @@map("parts")
+}
+
+// ---------------------------------------------------------------------------
+// Vehicles and fitment
+// ---------------------------------------------------------------------------
+
+model Vehicle {
+  id String @id @default(uuid()) @db.Uuid
+
+  make        String
+  model       String
+  chassisCode String? @map("chassis_code")
+  yearFrom    Int?    @map("year_from")
+  yearTo      Int?    @map("year_to")
+  engineType  String? @map("engine_type")
+
+  attributes Json @default("{}")
+
+  /// Deduplication key, e.g. "TOYOTA|COROLLA|AE100".
+  ///
+  /// Why not @@unique([make, model, chassisCode])? Because Postgres treats
+  /// every NULL as distinct in a unique index, so two rows with a NULL
+  /// chassis code would both be allowed — exactly the duplicate this is meant
+  /// to prevent. A single non-null generated key has no such hole.
+  identityKey String @unique @map("identity_key")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  fitments PartFitment[]
+
+  @@index([make, model])
+  @@map("vehicles")
+}
+
+/// The join table PLAN.md's original schema was missing. Without it,
+/// `vehicles` is an orphan and fitment collapses into runtime attribute
+/// guessing. Fitment is a fact you assert and can correct — not a value you
+/// recompute on every request.
+model PartFitment {
+  id String @id @default(uuid()) @db.Uuid
+
+  partId String @map("part_id") @db.Uuid
+  part   Part   @relation(fields: [partId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  vehicleId String  @map("vehicle_id") @db.Uuid
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  source     FitmentSource @default(INGESTED)
+  confidence Float         @default(0.5)
+  notes      String?
+
+  /// Who confirmed it, when a human did. Null means nobody has.
+  verifiedById String?   @map("verified_by_id") @db.Uuid
+  verifiedBy   User?     @relation(fields: [verifiedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  verifiedAt   DateTime? @map("verified_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([partId, vehicleId])
+  @@index([vehicleId])
+  @@map("part_fitments")
+}
+
+// ---------------------------------------------------------------------------
+// Embeddings
+// ---------------------------------------------------------------------------
+
+model PartEmbedding {
+  id String @id @default(uuid()) @db.Uuid
+
+  partId String @map("part_id") @db.Uuid
+  part   Part   @relation(fields: [partId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  /// Prisma has no vector type. `Unsupported` means Prisma Client cannot read
+  /// or write this column at all — every embedding operation is raw SQL via
+  /// $queryRaw / $executeRaw. That is expected, not a workaround.
+  embedding Unsupported("vector(768)")
+
+  /// Exactly what text was embedded. Changing the recipe changes retrieval
+  /// quality, so it is recorded per row rather than assumed.
+  sourceText String @map("source_text")
+
+  /// Without these, a partial re-embed silently mixes two vector spaces in
+  /// one index: no error anywhere, retrieval quality just quietly degrades.
+  model String
+  dim   Int
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  /// One embedding per part per model — so a new model can be embedded
+  /// alongside the old one and compared before the old is dropped.
+  @@unique([partId, model])
+  @@map("part_embeddings")
+}
+
+// ---------------------------------------------------------------------------
+// Staff, audit
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(STAFF)
+  isActive     Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  verificationLogs  VerificationLog[]
+  confirmedFitments PartFitment[]
+
+  @@map("users")
+}
+
+model VerificationLog {
+  id String @id @default(uuid()) @db.Uuid
+
+  partId String @map("part_id") @db.Uuid
+  part   Part   @relation(fields: [partId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  /// SetNull, not Cascade: an audit trail must survive the deletion of the
+  /// user who made the entry. Losing history to tidy up a staff list is the
+  /// opposite of what an audit log is for.
+  userId String? @map("user_id") @db.Uuid
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  oldStatus AvailabilityStatus? @map("old_status")
+  newStatus AvailabilityStatus  @map("new_status")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([partId, createdAt])
+  @@index([createdAt])
+  @@map("verification_log")
+}
+
+// ---------------------------------------------------------------------------
+// Ingestion
+// ---------------------------------------------------------------------------
+
+/// One execution of the ingestion pipeline. Makes runs comparable over time:
+/// "the lexicon change took rule coverage from 71% to 87%" is a query, not a
+/// memory.
+model IngestionRun {
+  id String @id @default(uuid()) @db.Uuid
+
+  sourceFile String          @map("source_file")
+  status     IngestionStatus @default(RUNNING)
+
+  rowsTotal        Int @default(0) @map("rows_total")
+  rowsParsedByRule Int @default(0) @map("rows_parsed_by_rule")
+  rowsParsedByLlm  Int @default(0) @map("rows_parsed_by_llm")
+  rowsFlagged      Int @default(0) @map("rows_flagged")
+  rowsFailed       Int @default(0) @map("rows_failed")
+
+  startedAt  DateTime  @default(now()) @map("started_at") @db.Timestamptz(3)
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz(3)
+  notes      String?
+
+  rows StagingRow[]
+
+  @@map("ingestion_runs")
+}
+
+/// Raw CSV rows, stored verbatim before anything is parsed.
+///
+/// This is what makes ingestion resumable: a crash at row 800 of 1200 must
+/// not cost 800 LLM calls. It also preserves columns the domain model drops —
+/// notably price — so adding pricing later is a backfill, not a re-ingest.
+model StagingRow {
+  id String @id @default(uuid()) @db.Uuid
+
+  runId String       @map("run_id") @db.Uuid
+  run   IngestionRun @relation(fields: [runId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  /// 1-based line number in the source file, for error messages a human can
+  /// act on ("row 412 failed") rather than a uuid.
+  rowNumber Int @map("row_number")
+
+  /// The entire original row, every column, untouched.
+  raw Json
+
+  rawName        String  @map("raw_name")
+  normalizedName String? @map("normalized_name")
+
+  parsedAttributes Json?        @map("parsed_attributes")
+  parseSource      ParseSource? @map("parse_source")
+  parseConfidence  Float?       @map("parse_confidence")
+
+  /// Set when this row failed to parse. Kept rather than dropped — the
+  /// failures are the interesting ones.
+  error String?
+
+  /// Links back to the part this row produced, once it has produced one.
+  /// Null until the row is processed.
+  partId      String?   @map("part_id") @db.Uuid
+  part        Part?     @relation(fields: [partId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([runId, rowNumber])
+  @@index([runId, processedAt])
+  @@map("staging_rows")
+}

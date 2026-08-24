@@ -1,0 +1,47 @@
+# Local development database for LankaAuto.
+#
+# Image: pgvector/pgvector:pg16 -- plain `postgres:16` does NOT include the
+# vector extension, and compiling it on Windows is the painful path. This
+# image ships the extension already available to the cluster, which also
+# means Prisma's shadow database can create it without extra setup.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: lankaauto-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: lankaauto
+      POSTGRES_PASSWORD: lankaauto_dev
+      POSTGRES_DB: lankaauto
+      # Deterministic collation. Postgres sorts and compares text according to
+      # the database collation; pinning it means index behaviour is identical
+      # here, in CI, and in production, rather than following the host locale.
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+
+    ports:
+      # Host 5433 -> container 5432. Deliberately NOT 5432: if a native
+      # Postgres is ever installed on this machine it owns 5432, and the
+      # resulting "connects, but to the wrong database" failure is genuinely
+      # confusing to debug.
+      - "5433:5432"
+
+    volumes:
+      # A *named* volume, not a bind mount into the repo. Data survives
+      # `docker compose down`, is removed by `down -v`, and never risks
+      # landing in git.
+      - lankaauto_pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      # Postgres briefly accepts connections during init before it is really
+      # ready. Without this, `npm run db:up && npm run migrate` can race and
+      # fail on a cold start.
+      test: ["CMD-SHELL", "pg_isready -U lankaauto -d lankaauto"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  lankaauto_pgdata:

@@ -1,0 +1,48 @@
+{
+  "compilerOptions": {
+    // --- Module system -----------------------------------------------------
+    // package.json says "type": "module", so this is a native ESM project.
+    // NodeNext makes TypeScript resolve imports the same way Node actually
+    // does at runtime, instead of an approximation that compiles but crashes.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+
+    // --- Strictness --------------------------------------------------------
+    // All of these are on deliberately. Ingestion deals with messy CSV data
+    // where a missing field is the normal case, not the exception, and the
+    // compiler catching that is cheaper than a null crash 900 rows in.
+    "strict": true,
+
+    // `strict` does NOT include these two. Both matter here:
+    // - noUncheckedIndexedAccess: makes `row[3]` typed as `string | undefined`,
+    //   which is the truth for a CSV row of unknown width.
+    // - exactOptionalPropertyTypes: distinguishes "key absent" from
+    //   "key present but undefined" — the difference between "the price list
+    //   had no chassis code" and "the parser failed to read one".
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // --- Output ------------------------------------------------------------
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": true,
+    "declaration": false,
+
+    // --- Interop -----------------------------------------------------------
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+
+    // Verbatim module syntax: `import type` stays a type import and is erased.
+    // Prevents accidentally emitting a runtime import for a type-only symbol.
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
