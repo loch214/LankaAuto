@@ -139,8 +139,12 @@ model Part {
   /// per query so it can be indexed for fuzzy lookup in Phase 3.
   normalizedName String @map("normalized_name")
 
-  /// NOT globally unique — the same number recurs across brands. No unique
-  /// constraint until the real data has been inspected (PLAN.md §6).
+  /// The manufacturer's own code (e.g. "GUT11"). NOT globally unique — the
+  /// same number recurs across brands — so no unique constraint here; it
+  /// feeds `sourceKey` above, paired with brand, instead. Verified unique
+  /// *within* one brand's price list: 62/62 distinct on the GMB U-joint list.
+  /// Stored as printed; `normalizeCode` (backend/src/ingest/normalize-code.ts)
+  /// runs at ingestion time, not here.
   partNumber String? @map("part_number")
 
   /// Parsed values: part_type, make, model, chassis_code, position, ...
@@ -161,9 +165,25 @@ model Part {
   /// missing. Drives the Phase 9 parse-review screen.
   needsReview Boolean @default(false) @map("needs_review")
 
-  /// Idempotency key: sha256(sourceFile + normalizedName + brand).
-  /// Ingestion UPSERTS on this. Without it, re-running the pipeline after a
-  /// parser fix silently doubles the catalogue.
+  /// Idempotency key: `${brand.name ?? 'UNKNOWN'}|${normalizeCode(partNumber)}`.
+  /// Ingestion UPSERTS on this. Deliberately excludes the source file name and
+  /// the price-list date, so re-ingesting an updated list from the same brand
+  /// UPDATES existing parts instead of duplicating them — that is the
+  /// Milestone 1B checkpoint (run the pipeline twice, zero duplicate parts).
+  ///
+  /// A single generated string, not a `@@unique([brandId, partNumber])`
+  /// constraint, for the same reason as Vehicle.identityKey below: Postgres
+  /// treats every NULL as distinct in a unique index, and brandId is
+  /// nullable (see above). Two parts with no brand and the same code would
+  /// both be allowed under a compound constraint.
+  ///
+  /// NOT `sha256(sourceFile + normalizedName + brand)`, which an earlier
+  /// draft of this comment said. That was wrong on two counts: including the
+  /// source file breaks idempotency across a re-issued list, and
+  /// `normalizedName` is not a stable identifier — verified against the GMB
+  /// U-joint list, three distinct parts share the identical normalized
+  /// fitment string "MITSUBISHI CANTER,ROSA" at three different prices. See
+  /// `backend/docs/01-source-profile-gmb-ujoint.md` §4 and §9.
   sourceKey String @unique @map("source_key")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
