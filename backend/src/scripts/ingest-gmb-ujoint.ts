@@ -19,6 +19,7 @@
 import { prisma, disconnect } from '../lib/prisma.js';
 import { parseFitment, type FitmentSpan } from '../ingest/parse-fitment.js';
 import { normalizeCode } from '../ingest/normalize-code.js';
+import { normalizeName } from '../ingest/normalize-name.js';
 import { buildSourceKey } from '../ingest/build-source-key.js';
 import { GMB_UJOINT_ROWS, type GmbRow } from '../ingest/__fixtures__/gmb-ujoint-rows.js';
 
@@ -49,10 +50,6 @@ function buildAttributes(row: GmbRow, spans: readonly FitmentSpan[]) {
     inlineMake: spansByType(spans, 'make'),
     fuel: spansByType(spans, 'fuel'),
   };
-}
-
-function normalizeName(rawName: string): string {
-  return rawName.trim().replace(/\s+/g, ' ').toUpperCase();
 }
 
 async function ingestRow(

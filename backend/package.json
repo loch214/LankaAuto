@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit",
     "check:db": "tsx src/scripts/check-db.ts",
     "ingest:gmb-ujoint": "tsx src/scripts/ingest-gmb-ujoint.ts",
+    "dev": "tsx watch src/server.ts",
     "db:verify": "npm run db:reset && npm run check:db",
     "migrate:apply": "prisma migrate deploy && npm run check:db",
     "test": "vitest run",
@@ -27,12 +28,17 @@
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "express": "^5.2.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@rolldown/binding-win32-x64-msvc": "^1.2.5",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.10.5",
+    "@types/supertest": "^7.2.1",
     "prisma": "^6.1.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^4.1.11"
