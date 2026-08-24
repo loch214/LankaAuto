@@ -1,0 +1,20 @@
+# Normalise line endings.
+#
+# Without this, Git on Windows commits CRLF while the Docker container, CI,
+# and any Linux collaborator use LF -- so a file someone merely opened shows
+# every line as changed. `text=auto eol=lf` stores LF in the repository
+# regardless of the OS that wrote the file.
+* text=auto eol=lf
+
+# Files that must keep LF even locally: shell scripts break with CRLF, and
+# anything Docker executes runs on Linux.
+*.sh   text eol=lf
+Dockerfile text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# Binary -- never diffed, never line-ending converted.
+*.png  binary
+*.jpg  binary
+*.pdf  binary
+*.xlsx binary

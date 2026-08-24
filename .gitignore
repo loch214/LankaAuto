@@ -1,0 +1,85 @@
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+node_modules/
+.pnp
+.pnp.js
+
+# ---------------------------------------------------------------------------
+# Secrets and local config
+# ---------------------------------------------------------------------------
+# .env holds the real DATABASE_URL and GEMINI_API_KEY. Never commit it.
+# .env.example IS committed (see the negation below) so a fresh clone knows
+# which variables it needs, with placeholder values only.
+.env
+.env.*
+!.env.example
+
+# ---------------------------------------------------------------------------
+# TypeScript / build output
+# ---------------------------------------------------------------------------
+dist/
+build/
+*.tsbuildinfo
+
+# ---------------------------------------------------------------------------
+# Prisma
+# ---------------------------------------------------------------------------
+# prisma/migrations/ IS committed -- migrations are source code and every
+# environment must apply the exact same ordered set. Only generated and
+# local-only artefacts are ignored here.
+prisma/generated/
+prisma/*.db
+prisma/*.db-journal
+prisma/dev.db*
+
+# ---------------------------------------------------------------------------
+# Docker
+# ---------------------------------------------------------------------------
+# The Postgres volume is a *named* Docker volume, so no data directory lands
+# in the repo. This covers a local override file and any stray bind mount.
+docker-compose.override.yml
+.docker/
+pgdata/
+
+# ---------------------------------------------------------------------------
+# Ingestion artefacts
+# ---------------------------------------------------------------------------
+# Real price lists are shop data, not public portfolio data. Anonymised or
+# sample CSVs live in data/samples/ and ARE committed so the pipeline is
+# reproducible by anyone reading the repo.
+data/raw/
+data/*.csv
+data/*.xlsx
+!data/samples/
+
+# LLM parse cache -- large, regenerable, machine-specific.
+.cache/
+*.cache.json
+
+# ---------------------------------------------------------------------------
+# Logs and test output
+# ---------------------------------------------------------------------------
+*.log
+npm-debug.log*
+logs/
+coverage/
+.nyc_output/
+
+# ---------------------------------------------------------------------------
+# Editors and OS
+# ---------------------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Windows / Visual Studio leftovers -- this folder lives under a VS projects
+# directory, so these can appear without anyone asking for them.
+.vs/
+*.user
+*.suo
