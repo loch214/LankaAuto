@@ -100,6 +100,39 @@ describe('GET /parts', () => {
   });
 });
 
+describe('GET /parts/search', () => {
+  // Exact/fuzzy tiers only — hit the real DB, no network call. The semantic
+  // fallback tier calls the real Gemini API (see `services/embeddings.ts`),
+  // which this suite deliberately never does (`embeddings.test.ts` stubs
+  // `fetch` for exactly that reason); semantic quality is what `npm run eval`
+  // is for, against the checked-in eval set.
+  it('returns an exact-number hit when the query is a real code', async () => {
+    const res = await request.get('/parts/search').query({ q: 'gu 1000 hd' });
+    expect(res.status).toBe(200);
+    expect(res.body.hits.length).toBeGreaterThan(0);
+    expect(res.body.hits[0].matchType).toBe('exact-number');
+    expect(res.body.hits[0].partNumber).toBe('GU1000HD');
+  });
+
+  it('falls back to a fuzzy-number hit for a near-miss code', async () => {
+    const res = await request.get('/parts/search').query({ q: 'GU1000H' });
+    expect(res.status).toBe(200);
+    expect(res.body.hits.length).toBeGreaterThan(0);
+    expect(res.body.hits.every((h: { matchType: string }) => h.matchType === 'fuzzy-number')).toBe(true);
+    expect(res.body.hits.some((h: { partNumber: string }) => h.partNumber === 'GU1000HD')).toBe(true);
+  });
+
+  it('rejects a blank q with a 400, not an empty-string semantic call', async () => {
+    const res = await request.get('/parts/search').query({ q: '' });
+    expect(res.status).toBe(400);
+  });
+
+  it('caps limit at 20', async () => {
+    const res = await request.get('/parts/search').query({ q: 'gu', limit: '500' });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('GET /parts/:id', () => {
   it('returns full detail including attributes and vehicle fitments', async () => {
     const seed = await prisma.part.findFirst({ where: { fitments: { some: {} } } });

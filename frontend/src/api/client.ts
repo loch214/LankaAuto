@@ -1,4 +1,4 @@
-import type { AvailabilityStatus, Brand, Category, PartDetail, PartListResponse, Vehicle } from './types';
+import type { AvailabilityStatus, Brand, Category, PartDetail, PartListResponse, SearchHit, Vehicle } from './types';
 
 // Vite exposes only VITE_-prefixed env vars to client code — anything else
 // in .env is invisible here by design, so a backend secret can't leak into
@@ -69,6 +69,12 @@ export const api = {
   listParts: (params: PartListParams) =>
     get<PartListResponse>('/parts', params as Record<string, string | number | undefined>),
   getPart: (id: string) => get<PartDetail>(`/parts/${id}`),
+  // Hybrid search (PLAN.md §10 Phase 3) — exact/fuzzy part number, falling
+  // back to semantic description search. Distinct from `listParts`: this is
+  // "I don't know what filters to pick, I just have a number or a
+  // description," used by the staff fast-search screen.
+  searchParts: (q: string, limit = 10) =>
+    get<{ hits: SearchHit[] }>('/parts/search', { q, limit }).then((r) => r.hits),
   listCategories: () => get<{ categories: Category[] }>('/categories').then((r) => r.categories),
   listBrands: () => get<{ brands: Brand[] }>('/brands').then((r) => r.brands),
   listVehicles: () => get<{ vehicles: Vehicle[] }>('/vehicles').then((r) => r.vehicles),

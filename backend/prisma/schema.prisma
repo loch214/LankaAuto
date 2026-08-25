@@ -18,7 +18,10 @@ datasource db {
   // the shadow database gets it too. Hand-writing that line works for the
   // real database but is easy to forget for the shadow one — which is where
   // the confusing "type vector does not exist" error comes from.
-  extensions = [vector]
+  // pgTrgm backs the fuzzy part-number GIN index below (Phase 3) — trigram
+  // similarity, for a customer typo or reformatted code that a plain
+  // substring match wouldn't find.
+  extensions = [vector, pgTrgm(map: "pg_trgm")]
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +200,12 @@ model Part {
   @@index([categoryId])
   @@index([brandId])
   @@index([partNumber])
+  /// GIN trigram index for fuzzy part-number lookup (Phase 3). Backs
+  /// `similarity(part_number, $1)` / the `%` operator in
+  /// `find-part-by-number.ts` — a typo'd or differently-spaced code (e.g.
+  /// "GU7280" typed for "GU 7280/4") still needs to find its part. The
+  /// plain btree index above is for exact/prefix lookups only.
+  @@index([partNumber(ops: raw("gin_trgm_ops"))], type: Gin, map: "parts_part_number_trgm_idx")
   @@index([needsReview])
   @@index([availabilityStatus, lastVerifiedAt])
   /// GIN index for attribute filtering in the Phase 2 browse UI.

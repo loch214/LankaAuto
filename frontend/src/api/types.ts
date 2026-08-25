@@ -68,3 +68,17 @@ export interface PartListResponse {
   limit: number;
   offset: number;
 }
+
+/** Which tier of `GET /parts/search` produced a hit — see `hybrid-part-search.ts`. */
+export type SearchMatchType = 'exact-number' | 'fuzzy-number' | 'semantic';
+
+export interface SearchHit {
+  partId: string;
+  partNumber: string | null;
+  rawName: string;
+  brandName: string | null;
+  categoryName: string;
+  availabilityStatus: AvailabilityStatus;
+  location: string | null;
+  matchType: SearchMatchType;
+}

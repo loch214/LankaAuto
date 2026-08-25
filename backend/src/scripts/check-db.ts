@@ -137,6 +137,32 @@ async function main(): Promise<void> {
       : "missing or wrong opclass",
   );
 
+  // 6b. pg_trgm extension + the GIN trigram index backing fuzzy part-number
+  //     search (Phase 3). Same silent-failure shape as the vector checks
+  //     above: a missing index gives correct results at a sequential-scan
+  //     crawl, with nothing in the app layer to say why.
+  const trgmExt = await prisma.$queryRaw<{ extversion: string }[]>`
+    SELECT extversion FROM pg_extension WHERE extname = 'pg_trgm'
+  `;
+  record(
+    "pg_trgm extension installed",
+    trgmExt.length > 0,
+    trgmExt[0] ? `version ${trgmExt[0].extversion}` : "not found",
+  );
+
+  const trgmIdx = await prisma.$queryRaw<{ indexdef: string }[]>`
+    SELECT indexdef FROM pg_indexes
+    WHERE tablename = 'parts' AND indexname = 'parts_part_number_trgm_idx'
+  `;
+  const trgmDef = trgmIdx[0]?.indexdef ?? "";
+  record(
+    "GIN trigram index on parts.part_number",
+    trgmDef.includes("gin_trgm_ops"),
+    trgmDef.includes("gin_trgm_ops")
+      ? "gin_trgm_ops (matches the % operator / similarity())"
+      : "missing or wrong opclass — fuzzy part-number search will seq-scan",
+  );
+
   // 7. Do vector operations actually run? Cosine distance between two
   //    orthogonal unit vectors is exactly 1 — a cheap end-to-end proof that
   //    the extension works, not merely that it is listed.

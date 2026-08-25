@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { AvailabilityStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { buildPartWhere } from '../services/part-search.js';
+import { hybridPartSearch } from '../services/hybrid-part-search.js';
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
 
 export const partsRouter = Router();
@@ -52,6 +53,35 @@ partsRouter.get('/', async (req, res, next) => {
     ]);
 
     res.json({ parts, total, limit, offset });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const searchQuerySchema = z.object({
+  q: z.string().min(1).max(200),
+  limit: z.coerce.number().int().min(1).max(20).default(10),
+});
+
+/**
+ * GET /parts/search?q=&limit=
+ *
+ * Phase 3 (PLAN.md §10): the hybrid "single search box, part number or
+ * description" — see `hybridPartSearch` for the exact-number → fuzzy-number
+ * → semantic fallback. Deliberately separate from `GET /parts`, which stays
+ * a plain filtered listing for the browse page's category/brand/vehicle
+ * dropdowns; this route is for "I don't know which filters to click, I just
+ * know what I'm holding or what I need."
+ *
+ * Declared before `/:id` — `/search` would otherwise fail the uuid check on
+ * that route with a 400 rather than reaching this handler, which works but
+ * is the wrong reason for it to work.
+ */
+partsRouter.get('/search', async (req, res, next) => {
+  try {
+    const { q, limit } = searchQuerySchema.parse(req.query);
+    const hits = await hybridPartSearch(q, limit);
+    res.json({ hits });
   } catch (err) {
     next(err);
   }

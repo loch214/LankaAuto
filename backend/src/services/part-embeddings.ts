@@ -9,6 +9,7 @@
  * should exist in exactly one place.
  */
 import { randomUUID } from 'node:crypto';
+import type { AvailabilityStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { EMBEDDING_DIMENSIONS, EMBEDDING_MODEL_NAME } from './embeddings.js';
 
@@ -91,6 +92,8 @@ export interface NearestPartDetail extends NearestPart {
   readonly rawName: string;
   readonly brandName: string | null;
   readonly categoryName: string;
+  readonly availabilityStatus: AvailabilityStatus;
+  readonly location: string | null;
 }
 
 /**
@@ -105,7 +108,16 @@ export async function nearestPartsWithDetails(queryVector: readonly number[], li
   if (limit <= 0) throw new Error(`limit must be positive, got ${limit}`);
   const literal = toVectorLiteral(queryVector);
   const rows = await prisma.$queryRaw<
-    { part_id: string; part_number: string | null; raw_name: string; brand_name: string | null; category_name: string; distance: number }[]
+    {
+      part_id: string;
+      part_number: string | null;
+      raw_name: string;
+      brand_name: string | null;
+      category_name: string;
+      availability_status: AvailabilityStatus;
+      location: string | null;
+      distance: number;
+    }[]
   >`
     SELECT
       p.id AS part_id,
@@ -113,6 +125,8 @@ export async function nearestPartsWithDetails(queryVector: readonly number[], li
       p.raw_name,
       b.name AS brand_name,
       c.name AS category_name,
+      p.availability_status,
+      p.location,
       (pe.embedding <=> ${literal}::vector) AS distance
     FROM part_embeddings pe
     JOIN parts p ON p.id = pe.part_id
@@ -128,6 +142,8 @@ export async function nearestPartsWithDetails(queryVector: readonly number[], li
     rawName: r.raw_name,
     brandName: r.brand_name,
     categoryName: r.category_name,
+    availabilityStatus: r.availability_status,
+    location: r.location,
     distance: r.distance,
   }));
 }
