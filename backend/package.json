@@ -21,6 +21,7 @@
     "check:db": "tsx src/scripts/check-db.ts",
     "ingest:gmb-ujoint": "tsx src/scripts/ingest-gmb-ujoint.ts",
     "seed:admin": "tsx src/scripts/seed-admin.ts",
+    "seed:categories": "tsx src/scripts/seed-categories.ts",
     "dev": "tsx watch src/server.ts",
     "db:verify": "npm run db:reset && npm run check:db",
     "migrate:apply": "prisma migrate deploy && npm run check:db",
