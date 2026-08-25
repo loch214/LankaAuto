@@ -34,11 +34,20 @@ const PART_BRAND_LOGOS = [
 
 // Real spare-part photos for the "Browse" section slider. No brand text
 // baked into any of these — see the session notes for why that mattered.
+//
+// Every file here is pre-normalized to an identical 1200x1200 square by
+// `scripts/normalize-part-photos.mjs` (sources in assets-src/parts/). That
+// is deliberately an asset-pipeline job, not a CSS one: with all photos on
+// one canvas the card below can use plain `object-cover` and always fill
+// completely — no crop that slices the part in half, and no letterbox gap
+// that reads as an empty box. Add a new photo to assets-src/parts/, re-run
+// the script, then list it here.
 const PART_CATEGORIES = [
   { id: 'brakes', logo: '/images/parts/brakes.jpg' },
   { id: 'bearings', logo: '/images/parts/bearings.jpg' },
-  { id: 'suspension', logo: '/images/parts/suspension.jpg' },
-  { id: 'engine', logo: '/images/parts/gears.jpg' },
+  // NB: gears.jpg currently holds a coil-spring/shock photo, not gears —
+  // the file was swapped without renaming. Named by what it shows.
+  { id: 'suspension', logo: '/images/parts/gears.jpg' },
   { id: 'gearbox', logo: '/images/parts/gearbox.jpg' },
   { id: 'ujoint', logo: '/images/parts/ujoint.jpg' },
   { id: 'alternator', logo: '/images/parts/alternator.jpg' },
@@ -98,7 +107,13 @@ export function LandingPage() {
               <img
                 src={src}
                 alt=""
-                className={`h-full w-full object-cover ${i === currentSlide ? 'animate-[ken-burns_10s_ease-out_forwards]' : ''}`}
+                // Always animating (not gated on i === currentSlide) so the
+                // zoom never gets removed-then-reapplied on a slide switch —
+                // that reset was visible as a jarring snap-back-to-normal-
+                // size mid-fade. Running continuously means whichever phase
+                // of the cycle a slide is in when it fades in is just where
+                // it is; nothing ever resets.
+                className="h-full w-full object-cover animate-[ken-burns_20s_ease-in-out_infinite_alternate]"
               />
             </div>
           ))}
@@ -164,24 +179,23 @@ export function LandingPage() {
                     }}
                     className="absolute inset-0 h-full w-full scale-125 object-cover opacity-60"
                   />
-                  <div className="relative h-full w-full overflow-hidden rounded-3xl bg-steel shadow-2xl ring-1 ring-white/10">
+                  <div className="relative h-full w-full overflow-hidden rounded-3xl shadow-2xl ring-1 ring-white/10">
                     <img
                       src={part.logo}
                       alt=""
-                      // object-contain (not cover) so the whole part is
-                      // visible instead of cropped — a bearing or U-joint
-                      // isn't recognizable if half of it is cut off. The
-                      // bg-steel behind fills the resulting letterbox
-                      // padding so non-square photos don't leave dead space.
-                      // Desaturated + slightly contrasted so stock photos
-                      // with wildly different color casts (e.g. a bright
-                      // cyan studio backdrop) still read as one consistent,
-                      // on-brand set instead of clashing with the
-                      // graphite/safety palette.
-                      style={{ filter: 'saturate(0.45) contrast(1.08) brightness(0.95)' }}
-                      className={`h-full w-full object-contain p-6 ${
-                        i === currentPartSlide ? 'animate-[ken-burns_6000ms_ease-out_forwards]' : ''
-                      }`}
+                      // object-cover is safe here precisely because every
+                      // source is pre-padded to a square (see
+                      // PART_CATEGORIES): the container is square too, so
+                      // cover fills edge-to-edge without actually cropping
+                      // anything off the part.
+                      //
+                      // Lightly desaturated so the one non-studio photo in
+                      // the set (brakes, a real garage shot) sits in the
+                      // same tonal family as the studio ones.
+                      style={{ filter: 'saturate(0.8) contrast(1.05)' }}
+                      // Always animating, not gated on i === currentPartSlide
+                      // — see the hero slider's identical fix above for why.
+                      className="h-full w-full object-cover animate-[ken-burns_12s_ease-in-out_infinite_alternate]"
                     />
                   </div>
                 </div>
