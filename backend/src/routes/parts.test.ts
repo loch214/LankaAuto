@@ -157,6 +157,31 @@ describe('GET /parts/:id', () => {
   });
 });
 
+describe('GET /parts/:id/fitment-check', () => {
+  it('returns CONFIRMED for an asserted part/vehicle pair', async () => {
+    const part = await prisma.part.findFirstOrThrow({ where: { partNumber: 'GUT12' } });
+    const fitment = await prisma.partFitment.findFirstOrThrow({ where: { partId: part.id } });
+
+    const res = await request.get(`/parts/${part.id}/fitment-check`).query({ vehicleId: fitment.vehicleId });
+    expect(res.status).toBe(200);
+    expect(res.body.verdict).toBe('CONFIRMED');
+  });
+
+  it('returns 404 when the part does not exist', async () => {
+    const vehicle = await prisma.vehicle.findFirstOrThrow();
+    const res = await request
+      .get('/parts/00000000-0000-0000-0000-000000000000/fitment-check')
+      .query({ vehicleId: vehicle.id });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 when vehicleId is missing', async () => {
+    const part = await prisma.part.findFirstOrThrow();
+    const res = await request.get(`/parts/${part.id}/fitment-check`);
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('PATCH /parts/:id/availability', () => {
   const TEST_EMAIL = 'availability-test-staff@lankaauto.local';
   const TEST_PASSWORD = 'correct horse battery staple';

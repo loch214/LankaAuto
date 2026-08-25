@@ -4,6 +4,7 @@ import { AvailabilityStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { buildPartWhere } from '../services/part-search.js';
 import { hybridPartSearch } from '../services/hybrid-part-search.js';
+import { checkFitment } from '../services/fitment.js';
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
 
 export const partsRouter = Router();
@@ -121,6 +122,43 @@ partsRouter.get('/:id', async (req, res, next) => {
     }
 
     res.json(part);
+  } catch (err) {
+    next(err);
+  }
+});
+
+const fitmentCheckQuerySchema = z.object({
+  vehicleId: z.uuid(),
+});
+
+/**
+ * GET /parts/:id/fitment-check?vehicleId=
+ *
+ * Phase 4 (PLAN.md §10) — the part → vehicle direction: "does this part fit
+ * my car?" See `checkFitment` for the three-tier CONFIRMED/POSSIBLE/
+ * NO_MATCH answer; this route just resolves ids to a 404 before handing off,
+ * same shape as `GET /parts/:id`.
+ */
+partsRouter.get('/:id/fitment-check', async (req, res, next) => {
+  try {
+    const { id } = idParamSchema.parse(req.params);
+    const { vehicleId } = fitmentCheckQuerySchema.parse(req.query);
+
+    const [part, vehicle] = await Promise.all([
+      prisma.part.findUnique({ where: { id } }),
+      prisma.vehicle.findUnique({ where: { id: vehicleId } }),
+    ]);
+    if (part === null) {
+      res.status(404).json({ error: 'part not found' });
+      return;
+    }
+    if (vehicle === null) {
+      res.status(404).json({ error: 'vehicle not found' });
+      return;
+    }
+
+    const result = await checkFitment(id, vehicleId);
+    res.json(result);
   } catch (err) {
     next(err);
   }
