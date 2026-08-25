@@ -6,6 +6,8 @@ import { brandsRouter } from './routes/brands.js';
 import { vehiclesRouter } from './routes/vehicles.js';
 import { authRouter } from './routes/auth.js';
 import { chatRouter } from './routes/chat.js';
+import { usersRouter } from './routes/users.js';
+import { reportsRouter } from './routes/reports.js';
 import { errorHandler } from './middleware/error-handler.js';
 
 /**
@@ -39,6 +41,8 @@ export function createApp() {
   app.use('/vehicles', vehiclesRouter);
   app.use('/auth', authRouter);
   app.use('/chat', chatRouter);
+  app.use('/users', usersRouter);
+  app.use('/reports', reportsRouter);
 
   app.use(errorHandler);
 

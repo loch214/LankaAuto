@@ -183,7 +183,7 @@ describe('GET /parts/:id/fitment-check', () => {
 });
 
 describe('PATCH /parts/:id/availability', () => {
-  const TEST_EMAIL = 'availability-test-staff@lankaauto.local';
+  const TEST_USERNAME = 'availability-test-staff';
   const TEST_PASSWORD = 'correct horse battery staple';
   let staffToken: string;
 
@@ -191,16 +191,16 @@ describe('PATCH /parts/:id/availability', () => {
     const { hashPassword } = await import('../lib/auth.js');
     const passwordHash = await hashPassword(TEST_PASSWORD);
     await prisma.user.upsert({
-      where: { email: TEST_EMAIL },
-      create: { name: 'Availability Test Staff', email: TEST_EMAIL, passwordHash, role: 'STAFF' },
+      where: { username: TEST_USERNAME },
+      create: { name: 'Availability Test Staff', username: TEST_USERNAME, passwordHash, role: 'STAFF' },
       update: { passwordHash, role: 'STAFF', isActive: true },
     });
-    const login = await request.post('/auth/login').send({ email: TEST_EMAIL, password: TEST_PASSWORD });
+    const login = await request.post('/auth/login').send({ username: TEST_USERNAME, password: TEST_PASSWORD });
     staffToken = login.body.token;
   });
 
   afterAll(async () => {
-    await prisma.user.deleteMany({ where: { email: TEST_EMAIL } });
+    await prisma.user.deleteMany({ where: { username: TEST_USERNAME } });
   });
 
   it('rejects an unauthenticated request with 401', async () => {
@@ -245,5 +245,88 @@ describe('PATCH /parts/:id/availability', () => {
       .set('Authorization', `Bearer ${staffToken}`)
       .send({ status: 'IN_STOCK' });
     expect(res.status).toBe(404);
+  });
+
+  describe('POST /parts/bulk-availability', () => {
+    it('rejects an unauthenticated request with 401', async () => {
+      const res = await request.post('/parts/bulk-availability').send({ status: 'LOW', dryRun: true });
+      expect(res.status).toBe(401);
+    });
+
+    it('dry-run reports matched/willChange without writing anything', async () => {
+      const category = await prisma.category.findFirstOrThrow({ where: { slug: 'u-joints' } });
+      // Put every u-joint into a known, non-target state first so the count
+      // is deterministic regardless of what earlier tests in this file did.
+      await prisma.part.updateMany({ where: { categoryId: category.id }, data: { availabilityStatus: 'LOW' } });
+      const before = await prisma.part.count({ where: { categoryId: category.id, availabilityStatus: 'LOW' } });
+
+      const res = await request
+        .post('/parts/bulk-availability')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({ categorySlug: 'u-joints', status: 'OUT_OF_STOCK', dryRun: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.matched).toBe(before);
+      expect(res.body.willChange).toBe(before);
+
+      const after = await prisma.part.count({ where: { categoryId: category.id, availabilityStatus: 'LOW' } });
+      expect(after).toBe(before);
+    });
+
+    it('applies the status to every matched part and writes one log row per part with its real oldStatus', async () => {
+      const category = await prisma.category.findFirstOrThrow({ where: { slug: 'steering-joints' } });
+      await prisma.part.updateMany({ where: { categoryId: category.id }, data: { availabilityStatus: 'IN_STOCK' } });
+      const targets = await prisma.part.findMany({ where: { categoryId: category.id } });
+
+      const res = await request
+        .post('/parts/bulk-availability')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({ categorySlug: 'steering-joints', status: 'OUT_OF_STOCK', dryRun: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.updated).toBe(targets.length);
+
+      for (const target of targets) {
+        const part = await prisma.part.findUniqueOrThrow({ where: { id: target.id } });
+        expect(part.availabilityStatus).toBe('OUT_OF_STOCK');
+        expect(part.verifiedSource).toBe('STAFF');
+
+        const log = await prisma.verificationLog.findFirst({
+          where: { partId: target.id },
+          orderBy: { createdAt: 'desc' },
+        });
+        expect(log?.newStatus).toBe('OUT_OF_STOCK');
+        expect(log?.oldStatus).toBe('IN_STOCK');
+      }
+    });
+
+    it('skips parts already at the target status (no matches, no writes)', async () => {
+      const category = await prisma.category.findFirstOrThrow({ where: { slug: 'steering-joints' } });
+      await prisma.part.updateMany({ where: { categoryId: category.id }, data: { availabilityStatus: 'OUT_OF_STOCK' } });
+
+      const res = await request
+        .post('/parts/bulk-availability')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({ categorySlug: 'steering-joints', status: 'OUT_OF_STOCK', dryRun: false });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects a filter matching nothing with 400', async () => {
+      const res = await request
+        .post('/parts/bulk-availability')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({ categorySlug: 'this-slug-does-not-exist', status: 'LOW', dryRun: true });
+      expect(res.status).toBe(400);
+    });
+
+    // The real dev catalogue (62 parts) is far too small to seed an
+    // over-the-cap request end-to-end, so this only pins the exported
+    // constant the route enforces against — a change to it should be
+    // deliberate, not accidental.
+    it('exports the bulk-update cap other tests/UI code can reference', async () => {
+      const { BULK_UPDATE_LIMIT } = await import('./parts.js');
+      expect(BULK_UPDATE_LIMIT).toBe(5000);
+    });
   });
 });

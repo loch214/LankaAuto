@@ -106,7 +106,7 @@ Instead:
 - **Rotating verification**: staff verify one category at a time (e.g. Mon = brakes, Tue = filters). The app tracks which categories are overdue and nudges staff.
 - **One-tap updates**: staff search a part → tap a status button. No forms, no quantity entry. Low friction is what keeps it alive.
 
-Customer-facing UI shows availability plus the freshness note, and always advises confirming by phone for anything not recently verified.
+**Customer-facing UI does not show availability status or freshness at all** (revised 2026-08-26) — status/freshness is a staff-facing tool (search + reports), not a customer promise. Customers are directed to call or visit the shop to check availability; the customer chat agent's tools don't even return the status field, so it's structurally impossible for the agent to state or imply stock levels.
 
 ---
 
@@ -222,7 +222,7 @@ Nothing in this plan produces that content. Building the table, the embedding pa
 
 - Tools 1–5, read-only
 - Tone: helpful, guides an unsure customer toward the right part
-- Always shows availability **with the freshness caveat**
+- **Never states or implies stock/availability** (revised 2026-08-26) — `search_parts` doesn't even return the status field to this agent. If asked "is it in stock," the answer is always "call or visit the shop to check."
 - Never invents a part — if confidence is low, says so and suggests calling the shop
 
 ### Staff agent
@@ -247,7 +247,7 @@ Every answer cites its source: the `raw_name` of the matched part, the attribute
 
 - **Landing page** — proper showcase design: hero, what the shop stocks, brands carried, contact/location, opening hours
 - **Browse catalogue** — filter by category → sub-category, by brand, by vehicle make/model. Essential given thousands of SKUs; nobody scrolls a flat list
-- **Part detail page** — raw name, brand, parsed attributes, availability + freshness, cross-referenced alternatives
+- **Part detail page** — raw name, brand, parsed attributes, cross-referenced alternatives. No availability/freshness shown (revised 2026-08-26) — a "call or visit to check" prompt instead
 - **Chat assistant** — persistent widget: "Describe what you need, or enter a part number"
 
 ### Staff app (login required)

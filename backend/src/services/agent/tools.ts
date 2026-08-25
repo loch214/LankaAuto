@@ -47,7 +47,7 @@ export const CUSTOMER_TOOLS: readonly FunctionDeclaration[] = [
   {
     name: 'search_parts',
     description:
-      "Search the catalogue by part number (exact or approximate) or by a plain-language description of what the customer needs. Always try this first when a customer names a part, a code, or a symptom/need (e.g. 'brake pads for a 2015 Vitz', 'GUT 12', 'something for my Hiace's steering'). Returns each hit's availability status, brand, category, and how it matched (exact-number / fuzzy-number / semantic) — matchType tells you how confident to be.",
+      "Search the catalogue by part number (exact or approximate) or by a plain-language description of what the customer needs. Always try this first when a customer names a part, a code, or a symptom/need (e.g. 'brake pads for a 2015 Vitz', 'GUT 12', 'something for my Hiace's steering'). Returns each hit's brand, category, and how it matched (exact-number / fuzzy-number / semantic) — matchType tells you how confident to be. Does NOT return stock/availability — this tool never knows it, so never state or imply whether a part is in stock; tell the customer to call or visit the shop to check.",
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -108,14 +108,6 @@ export interface ToolExecutionResult {
   readonly citedParts: readonly PartCitation[];
 }
 
-function freshnessNote(lastVerifiedAt: Date | null): string {
-  if (lastVerifiedAt === null) return 'never verified by staff — treat as unconfirmed';
-  const days = Math.floor((Date.now() - lastVerifiedAt.getTime()) / 86_400_000);
-  if (days === 0) return 'verified today';
-  if (days === 1) return 'verified 1 day ago';
-  return `verified ${days} days ago`;
-}
-
 export async function executeTool(name: string, rawArgs: Record<string, unknown>): Promise<ToolExecutionResult> {
   switch (name) {
     case 'search_parts': {
@@ -123,14 +115,18 @@ export async function executeTool(name: string, rawArgs: Record<string, unknown>
       const hits = await hybridPartSearch(query, limit ?? 5);
       return {
         response: {
+          // Deliberately no availabilityStatus/freshness here — customers are
+          // told to call or visit to check stock, never told a status by the
+          // agent (see the system prompt and PLAN.md §5/§7). Stripping the
+          // field from the tool's own response, rather than just telling the
+          // model not to mention it, means it's structurally impossible for
+          // the agent to state or imply stock even if the prompt is ignored.
           hits: hits.map((h) => ({
             partId: h.partId,
             partNumber: h.partNumber,
             rawName: h.rawName,
             brandName: h.brandName,
             categoryName: h.categoryName,
-            availabilityStatus: h.availabilityStatus,
-            freshness: freshnessNote(h.lastVerifiedAt),
             matchType: h.matchType,
           })),
         },

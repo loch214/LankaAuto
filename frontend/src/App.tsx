@@ -6,6 +6,8 @@ import { PartDetailPage } from './pages/PartDetailPage';
 import { VisitPage } from './pages/VisitPage';
 import { StaffLoginPage } from './pages/StaffLoginPage';
 import { StaffSearchPage } from './pages/StaffSearchPage';
+import { StaffUsersPage } from './pages/StaffUsersPage';
+import { StaffReportsPage } from './pages/StaffReportsPage';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 
 export default function App() {
@@ -22,6 +24,22 @@ export default function App() {
           element={
             <ProtectedRoute>
               <StaffSearchPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff/users"
+          element={
+            <ProtectedRoute role="ADMIN">
+              <StaffUsersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff/reports"
+          element={
+            <ProtectedRoute role="ADMIN">
+              <StaffReportsPage />
             </ProtectedRoute>
           }
         />

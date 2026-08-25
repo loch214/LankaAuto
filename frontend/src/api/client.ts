@@ -1,12 +1,21 @@
 import type {
   AvailabilityStatus,
   Brand,
+  BulkAvailabilityParams,
+  BulkAvailabilityResult,
   Category,
   ChatTurnRequest,
   ChatTurnResponse,
+  CreateStaffAccountInput,
   PartDetail,
   PartListResponse,
   SearchHit,
+  StaffAccount,
+  StockSummaryReport,
+  StaleParts,
+  ActivityLog,
+  OutOfStockParts,
+  UpdateStaffAccountInput,
   Vehicle,
 } from './types';
 
@@ -54,15 +63,18 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function authedRequest<T>(
-  method: 'POST' | 'PATCH',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
   token: string,
-  body: unknown,
+  body?: unknown,
 ): Promise<T> {
   const res = await fetch(new URL(path, API_BASE_URL), {
     method,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res));
   return res.json() as Promise<T>;
@@ -81,7 +93,7 @@ export interface PartListParams {
 export interface StaffUser {
   id: string;
   name: string;
-  email: string;
+  username: string;
   role: 'STAFF' | 'ADMIN';
 }
 
@@ -103,11 +115,11 @@ export const api = {
   listBrands: () => get<{ brands: Brand[] }>('/brands').then((r) => r.brands),
   listVehicles: () => get<{ vehicles: Vehicle[] }>('/vehicles').then((r) => r.vehicles),
 
-  login: (email: string, password: string) =>
+  login: (username: string, password: string) =>
     fetch(new URL('/auth/login', API_BASE_URL), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
     }).then(async (res) => {
       if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res));
       return res.json() as Promise<{ token: string; user: StaffUser }>;
@@ -121,4 +133,25 @@ export const api = {
     ),
   updateAvailability: (token: string, partId: string, status: AvailabilityStatus) =>
     authedRequest<PartDetail>('PATCH', `/parts/${partId}/availability`, token, { status }),
+  bulkUpdateAvailability: (token: string, params: BulkAvailabilityParams) =>
+    authedRequest<BulkAvailabilityResult>('POST', '/parts/bulk-availability', token, params),
+
+  // Admin-only account management (backend: routes/users.ts).
+  listStaffAccounts: (token: string) =>
+    authedRequest<{ users: StaffAccount[] }>('GET', '/users', token).then((r) => r.users),
+  createStaffAccount: (token: string, input: CreateStaffAccountInput) =>
+    authedRequest<StaffAccount>('POST', '/users', token, input),
+  updateStaffAccount: (token: string, id: string, input: UpdateStaffAccountInput) =>
+    authedRequest<StaffAccount>('PATCH', `/users/${id}`, token, input),
+  deleteStaffAccount: (token: string, id: string) =>
+    authedRequest<{ id: string }>('DELETE', `/users/${id}`, token),
+
+  // Admin-only reports (backend: routes/reports.ts).
+  getStockSummary: (token: string) => authedRequest<StockSummaryReport>('GET', '/reports/stock-summary', token),
+  getStaleParts: (token: string, limit = 50, offset = 0) =>
+    authedRequest<StaleParts>('GET', `/reports/stale-parts?limit=${limit}&offset=${offset}`, token),
+  getActivityLog: (token: string, limit = 50, offset = 0) =>
+    authedRequest<ActivityLog>('GET', `/reports/activity?limit=${limit}&offset=${offset}`, token),
+  getOutOfStock: (token: string, limit = 50, offset = 0) =>
+    authedRequest<OutOfStockParts>('GET', `/reports/out-of-stock?limit=${limit}&offset=${offset}`, token),
 };

@@ -6,16 +6,16 @@ import { hashPassword } from '../lib/auth.js';
 
 const request = supertest(createApp());
 
-const TEST_EMAIL = 'auth-test-staff@lankaauto.local';
+const TEST_USERNAME = 'auth-test-staff';
 const TEST_PASSWORD = 'correct horse battery staple';
 
 async function seedTestUser(overrides: Partial<{ isActive: boolean; role: 'STAFF' | 'ADMIN' }> = {}) {
   const passwordHash = await hashPassword(TEST_PASSWORD);
   return prisma.user.upsert({
-    where: { email: TEST_EMAIL },
+    where: { username: TEST_USERNAME },
     create: {
       name: 'Auth Test Staff',
-      email: TEST_EMAIL,
+      username: TEST_USERNAME,
       passwordHash,
       role: overrides.role ?? 'STAFF',
       isActive: overrides.isActive ?? true,
@@ -29,40 +29,40 @@ async function seedTestUser(overrides: Partial<{ isActive: boolean; role: 'STAFF
 }
 
 afterAll(async () => {
-  await prisma.user.deleteMany({ where: { email: TEST_EMAIL } });
+  await prisma.user.deleteMany({ where: { username: TEST_USERNAME } });
   await disconnect();
 });
 
 describe('POST /auth/login', () => {
-  it('logs in with the correct email and password, returning a usable token', async () => {
+  it('logs in with the correct username and password, returning a usable token', async () => {
     await seedTestUser();
-    const res = await request.post('/auth/login').send({ email: TEST_EMAIL, password: TEST_PASSWORD });
+    const res = await request.post('/auth/login').send({ username: TEST_USERNAME, password: TEST_PASSWORD });
     expect(res.status).toBe(200);
     expect(res.body.token).toEqual(expect.any(String));
-    expect(res.body.user.email).toBe(TEST_EMAIL);
+    expect(res.body.user.username).toBe(TEST_USERNAME);
     expect(res.body.user.passwordHash).toBeUndefined();
   });
 
   it('rejects the wrong password with 401', async () => {
     await seedTestUser();
-    const res = await request.post('/auth/login').send({ email: TEST_EMAIL, password: 'wrong' });
+    const res = await request.post('/auth/login').send({ username: TEST_USERNAME, password: 'wrong' });
     expect(res.status).toBe(401);
   });
 
-  it('rejects an email that does not exist, with the same message as a wrong password', async () => {
-    const res = await request.post('/auth/login').send({ email: 'nobody@lankaauto.local', password: 'x' });
+  it('rejects a username that does not exist, with the same message as a wrong password', async () => {
+    const res = await request.post('/auth/login').send({ username: 'nobody', password: 'x' });
     expect(res.status).toBe(401);
-    expect(res.body.error).toBe('invalid email or password');
+    expect(res.body.error).toBe('invalid username or password');
   });
 
   it('rejects a deactivated account even with the correct password', async () => {
     await seedTestUser({ isActive: false });
-    const res = await request.post('/auth/login').send({ email: TEST_EMAIL, password: TEST_PASSWORD });
+    const res = await request.post('/auth/login').send({ username: TEST_USERNAME, password: TEST_PASSWORD });
     expect(res.status).toBe(401);
   });
 
   it('400s on a malformed request body rather than 500ing', async () => {
-    const res = await request.post('/auth/login').send({ email: 'not-an-email' });
+    const res = await request.post('/auth/login').send({ username: '' });
     expect(res.status).toBe(400);
   });
 });
@@ -70,10 +70,10 @@ describe('POST /auth/login', () => {
 describe('GET /auth/me', () => {
   it('returns the user for a valid token', async () => {
     await seedTestUser();
-    const login = await request.post('/auth/login').send({ email: TEST_EMAIL, password: TEST_PASSWORD });
+    const login = await request.post('/auth/login').send({ username: TEST_USERNAME, password: TEST_PASSWORD });
     const res = await request.get('/auth/me').set('Authorization', `Bearer ${login.body.token}`);
     expect(res.status).toBe(200);
-    expect(res.body.email).toBe(TEST_EMAIL);
+    expect(res.body.username).toBe(TEST_USERNAME);
   });
 
   it('401s with no Authorization header', async () => {

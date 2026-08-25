@@ -8,7 +8,7 @@ interface AuthState {
   token: string | null;
   /** True only while validating a token found in storage on first load. */
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -43,8 +43,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  async function login(email: string, password: string) {
-    const { token: newToken, user: newUser } = await api.login(email, password);
+  async function login(username: string, password: string) {
+    const { token: newToken, user: newUser } = await api.login(username, password);
     localStorage.setItem(TOKEN_STORAGE_KEY, newToken);
     setToken(newToken);
     setUser(newUser);

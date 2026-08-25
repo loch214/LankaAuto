@@ -7,23 +7,24 @@ import { requireAuth } from '../middleware/require-auth.js';
 export const authRouter = Router();
 
 const loginSchema = z.object({
-  email: z.email(),
+  username: z.string().min(1),
   password: z.string().min(1),
 });
 
 /**
  * POST /auth/login
  *
- * Deliberately returns the same "invalid email or password" message whether
- * the email doesn't exist, the account is deactivated, or the password is
- * wrong — telling an attacker which one leaks which staff emails are real.
+ * Deliberately returns the same "invalid username or password" message
+ * whether the username doesn't exist, the account is deactivated, or the
+ * password is wrong — telling an attacker which one leaks which staff
+ * usernames are real.
  */
 authRouter.post('/login', async (req, res, next) => {
   try {
-    const { email, password } = loginSchema.parse(req.body);
+    const { username, password } = loginSchema.parse(req.body);
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    const invalid = () => res.status(401).json({ error: 'invalid email or password' });
+    const user = await prisma.user.findUnique({ where: { username } });
+    const invalid = () => res.status(401).json({ error: 'invalid username or password' });
 
     if (user === null || !user.isActive) {
       invalid();
@@ -39,7 +40,7 @@ authRouter.post('/login', async (req, res, next) => {
     const token = signStaffToken(user);
     res.json({
       token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: { id: user.id, name: user.name, username: user.username, role: user.role },
     });
   } catch (err) {
     next(err);
@@ -57,7 +58,7 @@ authRouter.get('/me', requireAuth, async (req, res, next) => {
       res.status(401).json({ error: 'invalid or expired token' });
       return;
     }
-    res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+    res.json({ id: user.id, name: user.name, username: user.username, role: user.role });
   } catch (err) {
     next(err);
   }

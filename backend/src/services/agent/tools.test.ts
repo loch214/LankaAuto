@@ -22,6 +22,19 @@ describe('executeTool', () => {
     await expect(executeTool('search_parts', {})).rejects.toThrow();
   });
 
+  // Customers are told to call or visit to check stock (PLAN.md §5/§7,
+  // revised 2026-08-26) — the tool must not hand the model anything it
+  // could state or imply availability from, not just be told not to.
+  it('search_parts never returns availability/freshness to the customer agent', async () => {
+    const result = await executeTool('search_parts', { query: 'GU1000HD' });
+    const hits = result.response['hits'] as Record<string, unknown>[];
+    expect(hits.length).toBeGreaterThan(0);
+    for (const hit of hits) {
+      expect(hit).not.toHaveProperty('availabilityStatus');
+      expect(hit).not.toHaveProperty('freshness');
+    }
+  });
+
   it('lookup_vehicle finds a real vehicle by partial, case-insensitive make/model', async () => {
     const result = await executeTool('lookup_vehicle', { make: 'toyota', model: 'hiace' });
     const vehicles = result.response['vehicles'] as { make: string; model: string }[];

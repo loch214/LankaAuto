@@ -132,7 +132,7 @@ export function ChatWidget() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="e.g. u-joint for a Toyota Hiace"
               disabled={isSending}
-              className="min-w-0 flex-1 rounded-sm border border-muted/30 px-3 py-2 text-sm focus:border-safety focus:outline-none disabled:opacity-60"
+              className="min-w-0 flex-1 rounded-sm border border-muted/30 bg-white px-3 py-2 text-sm text-graphite focus:border-safety focus:outline-none disabled:opacity-60"
             />
             <button
               type="submit"

@@ -88,6 +88,106 @@ partsRouter.get('/search', async (req, res, next) => {
   }
 });
 
+/**
+ * A single bulk update is capped so one mistyped/broad filter can't rewrite
+ * the entire catalogue's availability in one request. 5,000 comfortably
+ * covers "an entire category" at this catalogue's real scale while still
+ * being a deliberate ceiling, not an accident of whatever Postgres/Node can
+ * push through in one transaction.
+ */
+export const BULK_UPDATE_LIMIT = 5000;
+
+const bulkAvailabilitySchema = z.object({
+  q: z.string().max(200).optional(),
+  categorySlug: z.string().max(200).optional(),
+  brandId: z.uuid().optional(),
+  vehicleMake: z.string().max(200).optional(),
+  vehicleModel: z.string().max(200).optional(),
+  status: z.enum(AvailabilityStatus),
+  dryRun: z.boolean().default(false),
+});
+
+/**
+ * POST /parts/bulk-availability — staff only.
+ *
+ * The category-wise counterpart to the one-tap PATCH above: per-part tapping
+ * doesn't scale to a catalogue of thousands, so staff filter (same shape as
+ * `GET /parts`) and apply one status to everything that matches. Reuses
+ * `buildPartWhere` rather than a second filter builder.
+ *
+ * A plain `updateMany` can't produce a correct audit trail — each matched
+ * part has its own `oldStatus` — so this does findMany → createMany (one log
+ * row per part) → updateMany, all inside one transaction. Parts already at
+ * the target status are excluded up front so they don't generate no-op log
+ * rows.
+ *
+ * `dryRun: true` returns counts only, with no writes — this is what powers
+ * the frontend's "this will change 1,247 parts" confirmation step. Declared
+ * above `/:id`, same reason `/search` is: a literal path segment must not
+ * fall through to the `:id` uuid check.
+ */
+partsRouter.post(
+  '/bulk-availability',
+  requireAuth,
+  requireRole('STAFF', 'ADMIN'),
+  async (req, res, next) => {
+    try {
+      const { q, categorySlug, brandId, vehicleMake, vehicleModel, status, dryRun } =
+        bulkAvailabilitySchema.parse(req.body);
+
+      const where = {
+        ...buildPartWhere({ q, categorySlug, brandId, vehicleMake, vehicleModel }),
+      };
+      // Fold "not already at the target status" into the same AND the filter
+      // builder already produces, rather than a second top-level clause.
+      const AND = Array.isArray(where.AND) ? where.AND : where.AND !== undefined ? [where.AND] : [];
+      const scopedWhere = { AND: [...AND, { availabilityStatus: { not: status } }] };
+
+      const matched = await prisma.part.count({ where: scopedWhere });
+
+      if (matched === 0) {
+        res.status(400).json({ error: 'no parts match this filter (or all already have that status)' });
+        return;
+      }
+      if (matched > BULK_UPDATE_LIMIT) {
+        res.status(400).json({
+          error: `this filter matches ${matched} parts, over the ${BULK_UPDATE_LIMIT}-part limit for one bulk update — narrow the filter`,
+        });
+        return;
+      }
+
+      if (dryRun) {
+        res.json({ matched, willChange: matched });
+        return;
+      }
+
+      const targets = await prisma.part.findMany({
+        where: scopedWhere,
+        select: { id: true, availabilityStatus: true },
+      });
+
+      await prisma.$transaction([
+        prisma.verificationLog.createMany({
+          data: targets.map((part) => ({
+            partId: part.id,
+            userId: req.user!.id,
+            oldStatus: part.availabilityStatus,
+            newStatus: status,
+          })),
+        }),
+        prisma.part.updateMany({
+          where: { id: { in: targets.map((part) => part.id) } },
+          data: { availabilityStatus: status, lastVerifiedAt: new Date(), verifiedSource: 'STAFF' },
+        }),
+      ]);
+
+      res.json({ matched, updated: targets.length });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 const idParamSchema = z.object({
   // Part IDs are Postgres uuids (schema.prisma: `@id @default(uuid())`).
   // Validating the shape here means a malformed id fails with a clean 400,

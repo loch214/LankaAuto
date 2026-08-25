@@ -7,13 +7,6 @@ import { PartTag } from '../components/PartTag';
 
 const PAGE_SIZE = 20;
 
-const AVAILABILITY_DOT: Record<string, string> = {
-  IN_STOCK: 'bg-emerald-500',
-  LOW: 'bg-signal',
-  OUT_OF_STOCK: 'bg-red-500',
-  UNVERIFIED: 'bg-chalk/50',
-};
-
 /**
  * The catalogue browse page: search box plus the three filters PLAN.md §8
  * calls out — category, brand, vehicle make/model.
@@ -206,12 +199,6 @@ export function BrowsePage() {
                           <span>{part.category.name}</span>
                         </p>
                       </div>
-                      <span className="flex shrink-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-chalk/80">
-                        <span
-                          className={`h-2 w-2 rounded-full ${AVAILABILITY_DOT[part.availabilityStatus] ?? 'bg-chalk/50'}`}
-                        />
-                        {part.availabilityStatus.replace('_', ' ')}
-                      </span>
                     </Link>
                   </li>
                 ))}
