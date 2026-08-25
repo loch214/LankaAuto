@@ -42,6 +42,7 @@ const PART_CATEGORIES = [
   { id: 'gearbox', logo: '/images/parts/gearbox.jpg' },
   { id: 'ujoint', logo: '/images/parts/ujoint.jpg' },
   { id: 'alternator', logo: '/images/parts/alternator.jpg' },
+  { id: 'filter', logo: '/images/parts/filter.jpg' },
 ];
 
 // Radial fade for the ambient glow layer only (not the sharp foreground
@@ -163,17 +164,22 @@ export function LandingPage() {
                     }}
                     className="absolute inset-0 h-full w-full scale-125 object-cover opacity-60"
                   />
-                  <div className="relative h-full w-full overflow-hidden rounded-3xl shadow-2xl ring-1 ring-white/10">
+                  <div className="relative h-full w-full overflow-hidden rounded-3xl bg-steel shadow-2xl ring-1 ring-white/10">
                     <img
                       src={part.logo}
                       alt=""
+                      // object-contain (not cover) so the whole part is
+                      // visible instead of cropped — a bearing or U-joint
+                      // isn't recognizable if half of it is cut off. The
+                      // bg-steel behind fills the resulting letterbox
+                      // padding so non-square photos don't leave dead space.
                       // Desaturated + slightly contrasted so stock photos
                       // with wildly different color casts (e.g. a bright
                       // cyan studio backdrop) still read as one consistent,
                       // on-brand set instead of clashing with the
                       // graphite/safety palette.
                       style={{ filter: 'saturate(0.45) contrast(1.08) brightness(0.95)' }}
-                      className={`h-full w-full object-cover ${
+                      className={`h-full w-full object-contain p-6 ${
                         i === currentPartSlide ? 'animate-[ken-burns_6000ms_ease-out_forwards]' : ''
                       }`}
                     />
