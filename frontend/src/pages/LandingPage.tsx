@@ -44,14 +44,10 @@ const PART_CATEGORIES = [
   { id: 'tyres', logo: '/images/parts/tyres.jpg' },
 ];
 
-// Feathered-edge fade used to blend photos into the section background —
-// the image's own pixels dissolve to transparent toward the edges instead
-// of being decorated with a box/border/shadow around a hard rectangle.
-// Two linear gradients (one per axis) intersected keep the shape square
-// (not an oval/circle) while still softening all 4 sides, matching the
-// simple straight-edge feather look requested rather than a vignette.
-const PART_BLEND_MASK =
-  'linear-gradient(to right, transparent, black 6%, black 94%, transparent), linear-gradient(to bottom, transparent, black 6%, black 94%, transparent)';
+// Radial fade for the ambient glow layer only (not the sharp foreground
+// photo) — softens the blurred copy's own rectangular edge so the glow
+// itself tapers off into the page rather than stopping abruptly.
+const GLOW_FADE_MASK = 'radial-gradient(ellipse 70% 70% at 50% 50%, black 40%, transparent 85%)';
 
 const SLIDER_IMAGES = [
   '/images/slider/slide1.jpg',
@@ -141,11 +137,11 @@ export function LandingPage() {
       {/* ═══════ 2 — BROWSE CTA ═══════ */}
       <section ref={browseRef} className={`relative z-20 flex h-screen min-h-[600px] flex-col justify-center overflow-hidden bg-graphite ${browseRevealClass}`}>
         <div className="grid w-full lg:h-full lg:grid-cols-2">
-          {/* Left Side: Real spare-part photo slider. The photo itself
-              fades to transparent at the edges via a feathered CSS mask —
-              not a box with a shadow/border around it — so it dissolves
-              into the section background as a soft-edged square, not a
-              circle and not a hard-edged card. */}
+          {/* Left Side: Real spare-part photo slider. Neither a hard box
+              nor a faded-out edge — a heavily blurred, scaled-up copy of
+              the same photo sits behind it as an ambient glow (the
+              Apple/Spotify product-shot trick), so its colors bleed softly
+              into the page while the photo itself stays crisp and sharp. */}
           <div className="relative order-2 flex items-center justify-center px-6 py-14 lg:order-1 lg:h-full lg:px-12 lg:py-16">
             <div className="relative aspect-square w-full max-w-[460px]">
               {PART_CATEGORIES.map((part, i) => (
@@ -158,24 +154,29 @@ export function LandingPage() {
                   <img
                     src={part.logo}
                     alt=""
-                    // Desaturated + slightly contrasted so stock photos with
-                    // wildly different color casts (e.g. a bright cyan studio
-                    // backdrop) still read as one consistent, on-brand set
-                    // instead of clashing with the graphite/safety palette.
-                    // The mask is what actually blends the photo into the
-                    // background — it fades the image's own alpha, unlike a
-                    // shadow/border which just decorates a hard rectangle.
+                    aria-hidden="true"
                     style={{
-                      filter: 'saturate(0.45) contrast(1.08) brightness(0.95)',
-                      maskImage: PART_BLEND_MASK,
-                      WebkitMaskImage: PART_BLEND_MASK,
-                      maskComposite: 'intersect',
-                      WebkitMaskComposite: 'source-in',
+                      filter: 'blur(60px) saturate(1.3) brightness(0.85)',
+                      maskImage: GLOW_FADE_MASK,
+                      WebkitMaskImage: GLOW_FADE_MASK,
                     }}
-                    className={`h-full w-full object-cover ${
-                      i === currentPartSlide ? 'animate-[ken-burns_6000ms_ease-out_forwards]' : ''
-                    }`}
+                    className="absolute inset-0 h-full w-full scale-125 object-cover opacity-60"
                   />
+                  <div className="relative h-full w-full overflow-hidden rounded-3xl shadow-2xl ring-1 ring-white/10">
+                    <img
+                      src={part.logo}
+                      alt=""
+                      // Desaturated + slightly contrasted so stock photos
+                      // with wildly different color casts (e.g. a bright
+                      // cyan studio backdrop) still read as one consistent,
+                      // on-brand set instead of clashing with the
+                      // graphite/safety palette.
+                      style={{ filter: 'saturate(0.45) contrast(1.08) brightness(0.95)' }}
+                      className={`h-full w-full object-cover ${
+                        i === currentPartSlide ? 'animate-[ken-burns_6000ms_ease-out_forwards]' : ''
+                      }`}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -206,16 +207,23 @@ export function LandingPage() {
             <div className="relative aspect-square w-full max-w-[460px]">
               <img
                 src="/images/store-front.jpg"
-                alt="LankaAuto Storefront"
+                alt=""
+                aria-hidden="true"
                 style={{
-                  filter: 'saturate(0.55) contrast(1.05) brightness(0.95)',
-                  maskImage: PART_BLEND_MASK,
-                  WebkitMaskImage: PART_BLEND_MASK,
-                  maskComposite: 'intersect',
-                  WebkitMaskComposite: 'source-in',
+                  filter: 'blur(60px) saturate(1.3) brightness(0.85)',
+                  maskImage: GLOW_FADE_MASK,
+                  WebkitMaskImage: GLOW_FADE_MASK,
                 }}
-                className="h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full scale-125 object-cover opacity-60"
               />
+              <div className="relative h-full w-full overflow-hidden rounded-3xl shadow-2xl ring-1 ring-white/10">
+                <img
+                  src="/images/store-front.jpg"
+                  alt="LankaAuto Storefront"
+                  style={{ filter: 'saturate(0.55) contrast(1.05) brightness(0.95)' }}
+                  className="h-full w-full object-cover"
+                />
+              </div>
             </div>
           </div>
           <div className="flex flex-col justify-center px-8 py-8 sm:px-16 lg:py-0">
@@ -261,11 +269,8 @@ export function LandingPage() {
       {/* ═══════ 5 — CONTACT ═══════ */}
       <section ref={contactRef} className={`min-h-screen flex flex-col justify-center bg-graphite py-28 border-t border-white/5 ${contactRevealClass}`}>
         <div className="mx-auto max-w-5xl px-4 text-center">
-          <p className="font-sans text-sm font-semibold uppercase tracking-[0.3em] text-safety/80">
-            Get in Touch
-          </p>
-          <h2 className="mt-4 font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
-            Questions before you drive over?
+          <h2 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
+            Get in <span className="text-safety">Touch</span>
           </h2>
 
           <div className="mt-16 grid gap-6 sm:grid-cols-3">
