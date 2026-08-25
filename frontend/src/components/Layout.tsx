@@ -1,51 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-
-// Placeholder shop details — real address/phone/hours were never provided.
-// Swap these for the real thing when available (see HANDOFF.md §4).
-const SHOP = {
-  addressLine1: '24 Orugodawatta Road',
-  addressLine2: 'Colombo 14, Sri Lanka',
-  phonePrimary: '+94 77 123 4567',
-  phoneSecondary: '+94 71 987 6543',
-  email: 'sales@lankaauto.lk',
-  hours: [
-    { day: 'Monday – Friday', time: '8.00 AM – 6.00 PM' },
-    { day: 'Saturday', time: '8.00 AM – 4.00 PM' },
-    { day: 'Sunday', time: 'Closed' },
-  ],
-};
-
-function PhoneIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="size-4 shrink-0">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M4 5c0-.55.45-1 1-1h2.5a1 1 0 0 1 .97.76l1 4a1 1 0 0 1-.5 1.11L7.3 10.6a11 11 0 0 0 6.1 6.1l.73-1.67a1 1 0 0 1 1.11-.5l4 1a1 1 0 0 1 .76.97V19c0 .55-.45 1-1 1h-1C10.2 20 4 13.8 4 6V5Z"
-      />
-    </svg>
-  );
-}
-
-function PinIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="size-4 shrink-0">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12Z" />
-      <circle cx="12" cy="9" r="2.25" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="size-4 shrink-0">
-      <circle cx="12" cy="12" r="8.25" strokeLinecap="round" strokeLinejoin="round" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5V12l3 2" />
-    </svg>
-  );
-}
+import { SHOP, telHref } from '../shopInfo';
 
 function Wordmark({ className = '' }: { className?: string }) {
   return (
@@ -60,31 +16,33 @@ export function Layout({ children }: { children: ReactNode }) {
   const { user } = useAuth();
 
   return (
-    <div className="flex min-h-screen flex-col bg-chalk">
-      <header className="sticky top-0 z-50 border-b-[3px] border-safety bg-graphite/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <Link to="/" className="shrink-0">
-            <Wordmark className="text-chalk" />
+    <div className="flex min-h-screen flex-col bg-graphite text-chalk">
+
+
+      {/* ─── Main Navbar ─── */}
+      <header className="sticky top-0 z-50 bg-graphite/90 backdrop-blur-xl border-b border-white/5">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+          <Link to="/" className="shrink-0 group">
+            <Wordmark className="text-xl text-chalk transition-opacity group-hover:opacity-80 sm:text-2xl" />
           </Link>
-          <nav className="flex items-center gap-5 text-sm font-medium text-chalk sm:gap-7">
-            <Link to="/browse" className="hover:text-safety">
-              Browse parts
+          <nav className="flex items-center gap-6 text-sm font-medium text-chalk/80 sm:gap-8">
+            <Link to="/browse" className="relative py-1 transition-colors hover:text-white after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-safety after:transition-all hover:after:w-full">
+              Browse Parts
             </Link>
-            <a href="/#visit" className="hidden hover:text-safety sm:inline">
-              Visit us
-            </a>
-            <a
-              href={`tel:${SHOP.phonePrimary.replace(/\s+/g, '')}`}
-              className="hidden items-center gap-1.5 font-mono text-xs tracking-wide text-muted hover:text-safety md:flex"
-            >
-              <PhoneIcon />
+            <Link to="/visit" className="relative hidden py-1 transition-colors hover:text-white after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-safety after:transition-all hover:after:w-full sm:inline">
+              Visit Us
+            </Link>
+            <a href={telHref(SHOP.phonePrimary)} className="hidden sm:flex items-center gap-2 text-safety hover:text-signal transition-colors font-bold">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
               {SHOP.phonePrimary}
             </a>
             <Link
               to={user !== null ? '/staff' : '/staff/login'}
-              className="rounded-sm border border-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-chalk hover:border-safety hover:text-safety"
+              className="rounded-full border border-chalk/20 px-5 py-2 text-xs font-semibold uppercase tracking-wider text-chalk transition-all hover:border-safety hover:bg-safety hover:text-white"
             >
-              {user !== null ? 'Staff' : 'Staff login'}
+              {user !== null ? 'Staff' : 'Staff Login'}
             </Link>
           </nav>
         </div>
@@ -92,77 +50,73 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <main className="flex-1">{children}</main>
 
-      <footer id="visit" className="relative overflow-hidden border-t-[3px] border-safety bg-graphite text-chalk">
-        <div className="pegboard pointer-events-none absolute inset-0 opacity-[0.03]" />
-        <div className="relative mx-auto max-w-6xl px-4 py-16">
-          <p className="font-mono text-xs uppercase tracking-widest text-safety">Visit the counter</p>
-          <h2 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">Come find us</h2>
+      {/* ─── Premium Footer ─── */}
+      <footer className="relative overflow-hidden bg-graphite text-chalk">
+        {/* Gradient accent line */}
+        <div className="h-1 w-full bg-gradient-to-r from-safety via-signal to-safety" />
 
-          <div className="mt-10 grid gap-10 sm:grid-cols-3">
-            <div>
-              <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-muted">
-                <PinIcon />
-                Location
-              </div>
-              <p className="mt-3 text-lg leading-snug text-chalk">
-                {SHOP.addressLine1}
-                <br />
-                {SHOP.addressLine2}
+        <div className="mx-auto max-w-7xl px-6 py-20">
+          <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Brand column */}
+            <div className="lg:col-span-1">
+              <Wordmark className="text-2xl" />
+              <p className="mt-4 text-sm leading-relaxed text-chalk/50">
+                Japanese Motor Vehicle Spares since {SHOP.founded}. Precision components for every vehicle on Sri Lankan roads.
               </p>
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  `${SHOP.addressLine1}, ${SHOP.addressLine2}`,
-                )}`}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-4 inline-block text-sm font-medium text-safety hover:text-signal"
-              >
-                Get directions →
-              </a>
+              <div className="mt-6 flex gap-3">
+                <a href={SHOP.facebook} target="_blank" rel="noopener noreferrer" className="flex h-10 w-10 items-center justify-center rounded-full border border-chalk/10 text-chalk/40 transition-all hover:border-safety hover:bg-safety/10 hover:text-safety">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="size-4"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                </a>
+              </div>
             </div>
 
+            {/* Quick Links */}
             <div>
-              <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-muted">
-                <ClockIcon />
-                Opening hours
-              </div>
-              <dl className="mt-3 space-y-1.5 text-sm">
-                {SHOP.hours.map((row) => (
-                  <div key={row.day} className="flex justify-between gap-6">
-                    <dt className="text-chalk">{row.day}</dt>
-                    <dd className="font-mono text-muted">{row.time}</dd>
-                  </div>
+              <h4 className="font-display text-sm font-bold uppercase tracking-widest text-chalk/90">Quick Links</h4>
+              <ul className="mt-6 space-y-3">
+                <li><Link to="/browse" className="text-sm text-chalk/40 transition-colors hover:text-safety">Browse Parts</Link></li>
+                <li><Link to="/visit" className="text-sm text-chalk/40 transition-colors hover:text-safety">Visit Our Store</Link></li>
+                <li><Link to={user !== null ? '/staff' : '/staff/login'} className="text-sm text-chalk/40 transition-colors hover:text-safety">Staff Portal</Link></li>
+              </ul>
+            </div>
+
+            {/* Contact */}
+            <div>
+              <h4 className="font-display text-sm font-bold uppercase tracking-widest text-chalk/90">Contact</h4>
+              <ul className="mt-6 space-y-3 text-sm text-chalk/40">
+                <li>
+                  <a href={telHref(SHOP.phonePrimary)} className="transition-colors hover:text-safety">{SHOP.phonePrimary}</a>
+                </li>
+                <li>
+                  <a href={telHref(SHOP.phoneSecondary)} className="transition-colors hover:text-safety">{SHOP.phoneSecondary}</a>
+                </li>
+                <li>
+                  <a href={`mailto:${SHOP.email}`} className="transition-colors hover:text-safety">{SHOP.email}</a>
+                </li>
+              </ul>
+            </div>
+
+            {/* Hours */}
+            <div>
+              <h4 className="font-display text-sm font-bold uppercase tracking-widest text-chalk/90">Store Hours</h4>
+              <ul className="mt-6 space-y-3 text-sm text-chalk/40">
+                {SHOP.hours.map((h) => (
+                  <li key={h.day} className="flex items-center justify-between gap-4">
+                    <span>{h.day}</span>
+                    <span className="font-medium text-chalk/60">{h.time}</span>
+                  </li>
                 ))}
-              </dl>
-              <p className="mt-4 max-w-[26ch] text-xs text-muted">
-                Stock status shown online is a guide — call ahead to confirm anything not recently
-                verified.
-              </p>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-muted">
-                <PhoneIcon />
-                Talk to us
-              </div>
-              <div className="mt-3 space-y-1">
-                <a href={`tel:${SHOP.phonePrimary.replace(/\s+/g, '')}`} className="block font-mono text-lg text-chalk hover:text-safety">
-                  {SHOP.phonePrimary}
-                </a>
-                <a href={`tel:${SHOP.phoneSecondary.replace(/\s+/g, '')}`} className="block font-mono text-lg text-chalk hover:text-safety">
-                  {SHOP.phoneSecondary}
-                </a>
-              </div>
-              <a href={`mailto:${SHOP.email}`} className="mt-3 inline-block text-sm text-muted hover:text-safety">
-                {SHOP.email}
-              </a>
+              </ul>
             </div>
           </div>
 
-          <div className="mt-14 flex flex-col items-start justify-between gap-4 border-t border-chalk/10 pt-6 sm:flex-row sm:items-center">
-            <Wordmark className="text-chalk/70" />
-            <p className="text-xs text-muted">
-              Genuine and aftermarket parts, priced straight, no guesswork on fitment.
+          {/* Bottom bar */}
+          <div className="mt-16 flex flex-col items-center justify-between gap-4 border-t border-chalk/10 pt-8 sm:flex-row">
+            <p className="text-xs text-chalk/30">
+              © {new Date().getFullYear()} LankaAuto. All rights reserved.
+            </p>
+            <p className="text-xs text-chalk/20">
+              {SHOP.addressLine1}, {SHOP.addressLine2}
             </p>
           </div>
         </div>

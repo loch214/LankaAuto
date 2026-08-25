@@ -11,7 +11,7 @@ const AVAILABILITY_DOT: Record<string, string> = {
   IN_STOCK: 'bg-emerald-500',
   LOW: 'bg-signal',
   OUT_OF_STOCK: 'bg-red-500',
-  UNVERIFIED: 'bg-muted',
+  UNVERIFIED: 'bg-chalk/50',
 };
 
 /**
@@ -64,15 +64,15 @@ export function BrowsePage() {
   }
 
   const inputClass =
-    'mt-1 w-full rounded-sm border border-muted/40 bg-white px-3 py-2 text-sm text-graphite focus:border-safety focus:outline-none';
-  const labelClass = 'block text-sm font-medium text-graphite';
+    'mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white focus:border-safety focus:ring-1 focus:ring-safety focus:outline-none transition-all';
+  const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-chalk/60';
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10">
-      <h1 className="font-display text-3xl font-bold tracking-tight text-graphite">Browse parts</h1>
+    <div className="mx-auto max-w-7xl px-6 py-12 bg-graphite text-white">
+      <h1 className="font-display text-4xl font-bold tracking-tight">Browse Parts</h1>
 
-      <div className="mt-6 grid grid-cols-1 gap-8 md:grid-cols-[240px_1fr]">
-        <aside className="space-y-4">
+      <div className="mt-8 grid grid-cols-1 gap-10 md:grid-cols-[280px_1fr]">
+        <aside className="space-y-6">
           <div>
             <label className={labelClass} htmlFor="q">
               Search
@@ -103,9 +103,9 @@ export function BrowsePage() {
               }}
               className={inputClass}
             >
-              <option value="">All categories</option>
+              <option value="" className="bg-graphite text-white">All categories</option>
               {categoriesQuery.data?.map((c) => (
-                <option key={c.id} value={c.slug}>
+                <option key={c.id} value={c.slug} className="bg-graphite text-white">
                   {c.name}
                 </option>
               ))}
@@ -125,9 +125,9 @@ export function BrowsePage() {
               }}
               className={inputClass}
             >
-              <option value="">All brands</option>
+              <option value="" className="bg-graphite text-white">All brands</option>
               {brandsQuery.data?.map((b) => (
-                <option key={b.id} value={b.id}>
+                <option key={b.id} value={b.id} className="bg-graphite text-white">
                   {b.name}
                 </option>
               ))}
@@ -148,9 +148,9 @@ export function BrowsePage() {
               }}
               className={inputClass}
             >
-              <option value="">Any make</option>
+              <option value="" className="bg-graphite text-white">Any make</option>
               {[...new Set((vehiclesQuery.data ?? []).map((v) => v.make))].sort().map((make) => (
-                <option key={make} value={make}>
+                <option key={make} value={make} className="bg-graphite text-white">
                   {make}
                 </option>
               ))}
@@ -169,11 +169,11 @@ export function BrowsePage() {
                 resetToFirstPage();
               }}
               disabled={vehicleMake === ''}
-              className={`${inputClass} disabled:bg-chalk disabled:text-muted`}
+              className={`${inputClass} disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              <option value="">Any model</option>
+              <option value="" className="bg-graphite text-white">Any model</option>
               {modelsForMake.map((model) => (
-                <option key={model} value={model}>
+                <option key={model} value={model} className="bg-graphite text-white">
                   {model}
                 </option>
               ))}
@@ -182,33 +182,33 @@ export function BrowsePage() {
         </aside>
 
         <main>
-          {partsQuery.isLoading && <p className="text-muted">Loading…</p>}
+          {partsQuery.isLoading && <p className="text-chalk/60 animate-pulse">Loading catalogue...</p>}
           {partsQuery.isError && (
-            <p className="text-red-600">Could not load parts. Is the backend running?</p>
+            <p className="text-red-400">Could not load parts. Is the backend running?</p>
           )}
 
           {partsQuery.data && (
             <>
-              <p className="mb-3 text-sm text-muted">{partsQuery.data.total} parts found</p>
+              <p className="mb-4 text-sm font-medium text-safety">{partsQuery.data.total} parts found</p>
 
-              <ul className="divide-y divide-muted/20 rounded-sm border border-muted/30 bg-white">
+              <ul className="divide-y divide-white/5 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm shadow-xl overflow-hidden">
                 {partsQuery.data.parts.map((part) => (
                   <li key={part.id}>
                     <Link
                       to={`/parts/${part.id}`}
-                      className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-chalk"
+                      className="flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-white/10"
                     >
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-graphite">{part.rawName}</p>
-                        <p className="mt-1 flex items-center gap-2 text-sm text-muted">
-                          <span>{part.brand?.name ?? 'Unknown brand'}</span>
+                        <p className="truncate font-display font-bold text-white text-lg">{part.rawName}</p>
+                        <p className="mt-1 flex items-center gap-3 text-sm text-chalk/70">
+                          <span className="font-semibold text-chalk/90">{part.brand?.name ?? 'Unknown brand'}</span>
                           {part.partNumber && <PartTag>{part.partNumber}</PartTag>}
                           <span>{part.category.name}</span>
                         </p>
                       </div>
-                      <span className="flex shrink-0 items-center gap-1.5 text-xs uppercase tracking-wide text-muted">
+                      <span className="flex shrink-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-chalk/80">
                         <span
-                          className={`h-1.5 w-1.5 rounded-full ${AVAILABILITY_DOT[part.availabilityStatus] ?? 'bg-muted'}`}
+                          className={`h-2 w-2 rounded-full ${AVAILABILITY_DOT[part.availabilityStatus] ?? 'bg-chalk/50'}`}
                         />
                         {part.availabilityStatus.replace('_', ' ')}
                       </span>
@@ -218,15 +218,17 @@ export function BrowsePage() {
               </ul>
 
               {partsQuery.data.parts.length === 0 && (
-                <p className="mt-4 text-muted">No parts match these filters.</p>
+                <p className="mt-8 text-center text-chalk/50 py-12 rounded-2xl border border-white/10 border-dashed">
+                  No parts match these filters. Try adjusting your search criteria.
+                </p>
               )}
 
-              <div className="mt-4 flex items-center justify-between">
+              <div className="mt-8 flex items-center justify-between">
                 <button
                   type="button"
                   disabled={offset === 0}
                   onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-                  className="rounded-sm border border-muted/40 px-3 py-1.5 text-sm text-graphite disabled:opacity-40"
+                  className="btn-premium disabled:opacity-30 disabled:pointer-events-none"
                 >
                   Previous
                 </button>
@@ -234,7 +236,7 @@ export function BrowsePage() {
                   type="button"
                   disabled={offset + PAGE_SIZE >= partsQuery.data.total}
                   onClick={() => setOffset(offset + PAGE_SIZE)}
-                  className="rounded-sm border border-muted/40 px-3 py-1.5 text-sm text-graphite disabled:opacity-40"
+                  className="btn-premium disabled:opacity-30 disabled:pointer-events-none"
                 >
                   Next
                 </button>
