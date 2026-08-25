@@ -24,22 +24,22 @@ function Row({
     <div
       className="flex w-max"
       style={{
-        animation: `marquee-${direction} 80s linear infinite`,
+        animation: `marquee-${direction} 220s linear infinite`,
       }}
     >
       {tripled.map((brand, i) => (
         <div
           key={`${brand.id}-${i}`}
-          className="group flex h-36 w-48 shrink-0 items-center justify-center border border-muted/10 bg-white/80 px-6 transition-all duration-300 hover:bg-white hover:shadow-xl hover:scale-[1.05] hover:z-10"
+          className="group mx-3 flex h-32 w-44 shrink-0 items-center justify-center rounded-sm border border-white/[0.06] bg-white/[0.03] px-6 backdrop-blur-sm transition-all duration-500 ease-out hover:border-safety/30 hover:bg-white/10 hover:shadow-[0_0_30px_-8px_rgba(255,90,31,0.35)]"
         >
           {brand.logo ? (
             <img
               src={brand.logo}
               alt={brand.name}
-              className="h-20 w-auto max-w-[120px] object-contain transition-all duration-300"
+              className="h-16 w-auto max-w-[110px] object-contain opacity-60 grayscale transition-all duration-500 ease-out group-hover:opacity-100 group-hover:grayscale-0"
             />
           ) : (
-            <span className="font-display text-lg font-black tracking-widest text-graphite/40 text-center uppercase transition-colors duration-300 group-hover:text-graphite/80">
+            <span className="font-display text-lg font-black tracking-widest text-white/30 text-center uppercase transition-colors duration-500 group-hover:text-white/80">
               {brand.name}
             </span>
           )}
