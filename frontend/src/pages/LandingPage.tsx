@@ -40,8 +40,8 @@ const PART_CATEGORIES = [
   { id: 'suspension', logo: '/images/parts/suspension.jpg' },
   { id: 'engine', logo: '/images/parts/gears.jpg' },
   { id: 'gearbox', logo: '/images/parts/gearbox.jpg' },
-  { id: 'exhaust', logo: '/images/parts/exhaust.jpg' },
-  { id: 'tyres', logo: '/images/parts/tyres.jpg' },
+  { id: 'ujoint', logo: '/images/parts/ujoint.jpg' },
+  { id: 'alternator', logo: '/images/parts/alternator.jpg' },
 ];
 
 // Radial fade for the ambient glow layer only (not the sharp foreground
@@ -55,6 +55,7 @@ const SLIDER_IMAGES = [
   '/images/slider/slide3.jpg',
   '/images/slider/slide4.jpg',
   '/images/slider/slide5.jpg',
+  '/images/slider/slide6.jpg',
 ];
 
 export function LandingPage() {

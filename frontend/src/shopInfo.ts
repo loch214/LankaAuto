@@ -1,18 +1,17 @@
-// Real shop details sourced from dahanayakemotors.com
-// Using "LankaAuto" as the working brand name.
+// Fictional placeholder shop details for "LankaAuto" (not a real business).
+// Swap for real details whenever the user provides them.
 export const SHOP = {
-  addressLine1: '24 Orugodawatta Road',
-  addressLine2: 'Colombo 14, Sri Lanka',
-  phonePrimary: '+94 74 009 8323',
-  phoneSecondary: '+94 11 238 6686',
-  fax: '+94 11 238 6686',
-  email: 'info@dahanayakemotors.com',
-  facebook: 'https://www.facebook.com/DahanayakeMotors/',
-  founded: '1965',
+  addressLine1: '235 Wattala Road',
+  addressLine2: 'Colombo 10, Sri Lanka',
+  phonePrimary: '+94 75 543 0776',
+  phoneSecondary: '+94 11 892 8494',
+  fax: '+94 11 216 8823',
+  email: 'hello@lankaauto.lk',
+  facebook: 'https://www.facebook.com/LankaAutoParts/',
+  founded: '1992',
   hours: [
-    { day: 'Monday – Friday', time: '8.00 AM – 6.00 PM' },
-    { day: 'Saturday', time: '8.00 AM – 4.00 PM' },
-    { day: 'Sunday', time: 'Closed' },
+    { day: 'Tuesday – Sunday', time: '8.00 AM – 5.00 PM' },
+    { day: 'Monday', time: 'Closed' },
   ],
 } as const;
 
