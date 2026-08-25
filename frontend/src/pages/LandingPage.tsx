@@ -17,17 +17,41 @@ const VEHICLE_BRANDS = [
   { id: '10', name: 'Hino', logo: '/images/brands/hino.jpg' },
 ];
 
-const FEATURED_PART_BRANDS = [
-  { id: 'p1', name: 'Part 1', logo: '/images/brands/parts/1.jpg' },
-  { id: 'p2', name: 'Part 2', logo: '/images/brands/parts/2.jpg' },
-  { id: 'p3', name: 'Part 3', logo: '/images/brands/parts/3.jpg' },
-  { id: 'p4', name: 'Part 4', logo: '/images/brands/parts/4.jpg' },
-  { id: 'p5', name: 'Part 5', logo: '/images/brands/parts/5.jpg' },
-  { id: 'p6', name: 'Part 6', logo: '/images/brands/parts/6.jpg' },
-  { id: 'p7', name: 'Part 7', logo: '/images/brands/parts/7.jpg' },
-  { id: 'p8', name: 'Part 8', logo: '/images/brands/parts/8.jpg' },
-  { id: 'p9', name: 'Part 9', logo: '/images/brands/parts/9.jpg' },
+// Part-brand logos (e.g. Dokuro) for the "brands we carry" marquee row —
+// these are genuinely logos, not product photos, so they stay separate
+// from PART_CATEGORIES below.
+const PART_BRAND_LOGOS = [
+  { id: 'p1', name: 'Part Brand 1', logo: '/images/brands/parts/1.jpg' },
+  { id: 'p2', name: 'Part Brand 2', logo: '/images/brands/parts/2.jpg' },
+  { id: 'p3', name: 'Part Brand 3', logo: '/images/brands/parts/3.jpg' },
+  { id: 'p4', name: 'Part Brand 4', logo: '/images/brands/parts/4.jpg' },
+  { id: 'p5', name: 'Part Brand 5', logo: '/images/brands/parts/5.jpg' },
+  { id: 'p6', name: 'Part Brand 6', logo: '/images/brands/parts/6.jpg' },
+  { id: 'p7', name: 'Part Brand 7', logo: '/images/brands/parts/7.jpg' },
+  { id: 'p8', name: 'Part Brand 8', logo: '/images/brands/parts/8.jpg' },
+  { id: 'p9', name: 'Part Brand 9', logo: '/images/brands/parts/9.jpg' },
 ];
+
+// Real spare-part photos for the "Browse" section slider. No brand text
+// baked into any of these — see the session notes for why that mattered.
+const PART_CATEGORIES = [
+  { id: 'brakes', logo: '/images/parts/brakes.jpg' },
+  { id: 'bearings', logo: '/images/parts/bearings.jpg' },
+  { id: 'suspension', logo: '/images/parts/suspension.jpg' },
+  { id: 'engine', logo: '/images/parts/gears.jpg' },
+  { id: 'gearbox', logo: '/images/parts/gearbox.jpg' },
+  { id: 'exhaust', logo: '/images/parts/exhaust.jpg' },
+  { id: 'tyres', logo: '/images/parts/tyres.jpg' },
+];
+
+// Feathered-edge fade used to blend photos into the section background —
+// the image's own pixels dissolve to transparent toward the edges instead
+// of being decorated with a box/border/shadow around a hard rectangle.
+// Two linear gradients (one per axis) intersected keep the shape square
+// (not an oval/circle) while still softening all 4 sides, matching the
+// simple straight-edge feather look requested rather than a vignette.
+const PART_BLEND_MASK =
+  'linear-gradient(to right, transparent, black 6%, black 94%, transparent), linear-gradient(to bottom, transparent, black 6%, black 94%, transparent)';
 
 const SLIDER_IMAGES = [
   '/images/slider/slide1.jpg',
@@ -50,8 +74,8 @@ export function LandingPage() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentPartSlide((prev) => (prev + 1) % FEATURED_PART_BRANDS.length);
-    }, 3000);
+      setCurrentPartSlide((prev) => (prev + 1) % PART_CATEGORIES.length);
+    }, 6000);
     return () => clearInterval(timer);
   }, []);
 
@@ -115,38 +139,57 @@ export function LandingPage() {
       </section>
 
       {/* ═══════ 2 — BROWSE CTA ═══════ */}
-      <section ref={browseRef} className={`relative z-20 overflow-hidden bg-graphite/80 ${browseRevealClass}`}>
-        <div className="grid lg:grid-cols-2 h-[600px]">
-          {/* Left Side: Parts Image Slider */}
-          <div className="relative h-[400px] lg:h-full overflow-hidden bg-black/50">
-            {FEATURED_PART_BRANDS.map((part, i) => (
-              <div
-                key={part.id}
-                className={`absolute inset-0 transition-opacity duration-1000 ease-in-out flex items-center justify-center p-12 ${
-                  i === currentPartSlide ? 'opacity-100' : 'opacity-0'
-                }`}
-              >
-                <img
-                  src={part.logo}
-                  alt={part.name}
-                  className={`h-full w-full object-contain filter drop-shadow-2xl transition-transform duration-[3000ms] ease-out ${
-                    i === currentPartSlide ? 'scale-110' : 'scale-100'
+      <section ref={browseRef} className={`relative z-20 flex h-screen min-h-[600px] flex-col justify-center overflow-hidden bg-graphite ${browseRevealClass}`}>
+        <div className="grid w-full lg:h-full lg:grid-cols-2">
+          {/* Left Side: Real spare-part photo slider. The photo itself
+              fades to transparent at the edges via a feathered CSS mask —
+              not a box with a shadow/border around it — so it dissolves
+              into the section background as a soft-edged square, not a
+              circle and not a hard-edged card. */}
+          <div className="relative order-2 flex items-center justify-center px-6 py-14 lg:order-1 lg:h-full lg:px-12 lg:py-16">
+            <div className="relative aspect-square w-full max-w-[460px]">
+              {PART_CATEGORIES.map((part, i) => (
+                <div
+                  key={part.id}
+                  className={`absolute inset-0 transition-opacity duration-[1500ms] ease-in-out ${
+                    i === currentPartSlide ? 'opacity-100' : 'opacity-0'
                   }`}
-                />
-              </div>
-            ))}
-            <div className="absolute inset-0 bg-gradient-to-t from-graphite to-transparent opacity-40" />
+                >
+                  <img
+                    src={part.logo}
+                    alt=""
+                    // Desaturated + slightly contrasted so stock photos with
+                    // wildly different color casts (e.g. a bright cyan studio
+                    // backdrop) still read as one consistent, on-brand set
+                    // instead of clashing with the graphite/safety palette.
+                    // The mask is what actually blends the photo into the
+                    // background — it fades the image's own alpha, unlike a
+                    // shadow/border which just decorates a hard rectangle.
+                    style={{
+                      filter: 'saturate(0.45) contrast(1.08) brightness(0.95)',
+                      maskImage: PART_BLEND_MASK,
+                      WebkitMaskImage: PART_BLEND_MASK,
+                      maskComposite: 'intersect',
+                      WebkitMaskComposite: 'source-in',
+                    }}
+                    className={`h-full w-full object-cover ${
+                      i === currentPartSlide ? 'animate-[ken-burns_6000ms_ease-out_forwards]' : ''
+                    }`}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Right Side: Text & Button */}
-          <div className="flex flex-col justify-center px-8 py-20 sm:px-16 lg:py-32 border-l border-white/5 bg-gradient-to-br from-graphite to-graphite/50 backdrop-blur-md">
-            <h2 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl leading-tight">
+          <div className="order-1 flex flex-col justify-center px-8 py-10 sm:px-16 lg:order-2 lg:h-full lg:py-0">
+            <h2 className="font-display text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl leading-tight">
               Explore the Full <br/><span className="text-safety">Catalogue</span>
             </h2>
-            <p className="mt-6 max-w-md text-lg text-chalk/70 leading-relaxed">
+            <p className="mt-6 max-w-md text-base sm:text-lg text-chalk/70 leading-relaxed">
               Engine parts, gearbox parts, brake parts, shock absorbers, electrical parts, lights & mirrors, body parts — all from trusted Japanese brands. We have precisely what you need.
             </p>
-            <div className="mt-10">
+            <div className="mt-8">
               <Link to="/browse" className="btn-premium inline-flex w-auto">
                 Browse Items
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-4 ml-1"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
@@ -157,30 +200,38 @@ export function LandingPage() {
       </section>
 
       {/* ═══════ 3 — STORE TEASER ═══════ */}
-      <section ref={visitRef} className={`overflow-hidden bg-graphite text-chalk ${visitRevealClass}`}>
-        <div className="grid lg:grid-cols-2">
-          <div className="relative h-[400px] lg:h-auto">
-            <img
-              src="/images/store-front.jpg"
-              alt="LankaAuto Storefront"
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-graphite/90 to-transparent lg:bg-gradient-to-l lg:from-transparent lg:to-graphite" />
+      <section ref={visitRef} className={`flex h-screen min-h-[600px] flex-col justify-center overflow-hidden bg-graphite text-chalk ${visitRevealClass}`}>
+        <div className="grid lg:h-full lg:grid-cols-2">
+          <div className="relative flex items-center justify-center px-6 py-14 lg:h-full lg:px-12 lg:py-16">
+            <div className="relative aspect-square w-full max-w-[460px]">
+              <img
+                src="/images/store-front.jpg"
+                alt="LankaAuto Storefront"
+                style={{
+                  filter: 'saturate(0.55) contrast(1.05) brightness(0.95)',
+                  maskImage: PART_BLEND_MASK,
+                  WebkitMaskImage: PART_BLEND_MASK,
+                  maskComposite: 'intersect',
+                  WebkitMaskComposite: 'source-in',
+                }}
+                className="h-full w-full object-cover"
+              />
+            </div>
           </div>
-          <div className="flex flex-col justify-center px-8 py-20 sm:px-16 lg:py-32">
+          <div className="flex flex-col justify-center px-8 py-8 sm:px-16 lg:py-0">
             <p className="font-sans text-sm font-semibold uppercase tracking-[0.3em] text-safety/80">
               Our Flagship Store
             </p>
-            <h2 className="mt-4 font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+            <h2 className="mt-4 font-display text-3xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
               Experience the<br />difference in person
             </h2>
-            <p className="mt-6 max-w-md text-base leading-relaxed text-chalk/60">
+            <p className="mt-4 max-w-md text-base leading-relaxed text-chalk/60">
               Bring the part number, the old part, or just tell us the vehicle — staff will pull it straight off the rack.
             </p>
             <p className="mt-4 text-sm font-medium text-chalk/80">
               {shopAddress}
             </p>
-            <div className="mt-10">
+            <div className="mt-8">
               <Link
                 to="/visit"
                 className="btn-premium inline-flex w-auto"
@@ -193,7 +244,7 @@ export function LandingPage() {
       </section>
 
       {/* ═══════ 4 — BRANDS ═══════ */}
-      <section ref={brandsRef} className={`bg-graphite py-28 border-t border-white/5 ${brandsRevealClass}`}>
+      <section ref={brandsRef} className={`min-h-screen flex flex-col justify-center bg-graphite py-28 border-t border-white/5 ${brandsRevealClass}`}>
         <div className="mx-auto max-w-7xl px-4 text-center">
           <p className="font-sans text-sm font-semibold uppercase tracking-[0.3em] text-safety/80">
             Trusted Partners
@@ -203,12 +254,12 @@ export function LandingPage() {
           </h2>
         </div>
         <div className="mt-16">
-          <BrandMarquee row1Brands={VEHICLE_BRANDS} row2Brands={FEATURED_PART_BRANDS} />
+          <BrandMarquee row1Brands={VEHICLE_BRANDS} row2Brands={PART_BRAND_LOGOS} />
         </div>
       </section>
 
       {/* ═══════ 5 — CONTACT ═══════ */}
-      <section ref={contactRef} className={`bg-graphite py-28 border-t border-white/5 ${contactRevealClass}`}>
+      <section ref={contactRef} className={`min-h-screen flex flex-col justify-center bg-graphite py-28 border-t border-white/5 ${contactRevealClass}`}>
         <div className="mx-auto max-w-5xl px-4 text-center">
           <p className="font-sans text-sm font-semibold uppercase tracking-[0.3em] text-safety/80">
             Get in Touch

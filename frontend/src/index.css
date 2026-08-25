@@ -22,10 +22,17 @@ body {
   margin: 0;
   font-family: var(--font-sans);
   scroll-behavior: smooth;
-  /* The landing page uses full-bleed decorative elements (hero watermark,
-     hazard-stripe corner accent) that are meant to bleed past their
-     section's edge and get clipped there — this is a defensive backstop
-     so a bleed never turns into page-level horizontal scroll. */
+}
+
+/* The landing page uses full-bleed decorative elements (hero watermark,
+   hazard-stripe corner accent) that are meant to bleed past their
+   section's edge and get clipped there — this is a defensive backstop
+   so a bleed never turns into page-level horizontal scroll. Set on html
+   only, not body: setting it on both makes each element its own scroll
+   container (since a non-visible overflow-x forces overflow-y to compute
+   to auto), and the sticky nav then anchors to body's scroll box instead
+   of the one the browser actually scrolls — it stops sticking. */
+html {
   overflow-x: hidden;
 }
 
@@ -179,3 +186,13 @@ body {
 .bg-ken-burns {
   animation: ken-burns 30s ease-in-out infinite alternate;
 }
+
+/* Native CSS scroll-snap (mandatory, then proximity) was tried for the
+   landing page's full-page sections and dropped both times: it fights
+   the global `scroll-behavior: smooth` above, and on real trackpads/mice
+   the browser's forced re-snap produced a hard jump plus a brief
+   up/down "settle" jitter right after landing. Each landing-page section
+   is still exactly one viewport tall (h-screen), so scrolling still
+   reads as one-section-at-a-time — it's just native, ungoverned scroll
+   instead of forced snapping, and the .reveal fade (useReveal.ts) is
+   what supplies the "effect" between sections. */
