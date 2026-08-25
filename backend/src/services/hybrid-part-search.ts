@@ -33,6 +33,7 @@ export interface PartSearchHit {
   readonly categoryName: string;
   readonly availabilityStatus: AvailabilityStatus;
   readonly location: string | null;
+  readonly lastVerifiedAt: Date | null;
   readonly matchType: SearchMatchType;
 }
 
@@ -51,6 +52,7 @@ export async function hybridPartSearch(query: string, limit: number): Promise<Pa
       categoryName: p.category.name,
       availabilityStatus: p.availabilityStatus,
       location: p.location,
+      lastVerifiedAt: p.lastVerifiedAt,
       matchType: 'exact-number' as const,
     }));
   }
@@ -64,6 +66,7 @@ export async function hybridPartSearch(query: string, limit: number): Promise<Pa
       categoryName: m.categoryName,
       availabilityStatus: m.availabilityStatus,
       location: m.location,
+      lastVerifiedAt: m.lastVerifiedAt,
       matchType: 'fuzzy-number' as const,
     }));
   }
@@ -80,6 +83,7 @@ export async function hybridPartSearch(query: string, limit: number): Promise<Pa
     categoryName: m.categoryName,
     availabilityStatus: m.availabilityStatus,
     location: m.location,
+    lastVerifiedAt: m.lastVerifiedAt,
     matchType: 'semantic' as const,
   }));
 }

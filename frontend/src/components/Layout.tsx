@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { SHOP, telHref } from '../shopInfo';
+import { ChatWidget } from './ChatWidget';
 
 function Wordmark({ className = '' }: { className?: string }) {
   return (
@@ -15,6 +16,11 @@ function Wordmark({ className = '' }: { className?: string }) {
 export function Layout({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [scrolled, setScrolled] = useState(false);
+  const location = useLocation();
+  // Customer agent only (Phase 5) — staff have their own fast-search tool
+  // (StaffSearchPage), and the staff agent (PLAN.md §8) is a separate,
+  // later increment with different tools/tone, not this widget reused.
+  const isStaffRoute = location.pathname.startsWith('/staff');
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -149,6 +155,8 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </footer>
+
+      {!isStaffRoute && <ChatWidget />}
     </div>
   );
 }

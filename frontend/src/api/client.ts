@@ -1,4 +1,14 @@
-import type { AvailabilityStatus, Brand, Category, PartDetail, PartListResponse, SearchHit, Vehicle } from './types';
+import type {
+  AvailabilityStatus,
+  Brand,
+  Category,
+  ChatTurnRequest,
+  ChatTurnResponse,
+  PartDetail,
+  PartListResponse,
+  SearchHit,
+  Vehicle,
+} from './types';
 
 // Vite exposes only VITE_-prefixed env vars to client code — anything else
 // in .env is invisible here by design, so a backend secret can't leak into
@@ -29,6 +39,16 @@ async function get<T>(path: string, params?: Record<string, string | number | un
   }
 
   const res = await fetch(url);
+  if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res));
+  return res.json() as Promise<T>;
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(new URL(path, API_BASE_URL), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res));
   return res.json() as Promise<T>;
 }
@@ -75,6 +95,10 @@ export const api = {
   // description," used by the staff fast-search screen.
   searchParts: (q: string, limit = 10) =>
     get<{ hits: SearchHit[] }>('/parts/search', { q, limit }).then((r) => r.hits),
+  // Phase 5 customer chat agent (PLAN.md §10) — stateless on the server, so
+  // every call sends the full conversation so far, including the new user
+  // message at the end. See `routes/chat.ts`.
+  chat: (messages: ChatTurnRequest[]) => post<ChatTurnResponse>('/chat', { messages }),
   listCategories: () => get<{ categories: Category[] }>('/categories').then((r) => r.categories),
   listBrands: () => get<{ brands: Brand[] }>('/brands').then((r) => r.brands),
   listVehicles: () => get<{ vehicles: Vehicle[] }>('/vehicles').then((r) => r.vehicles),

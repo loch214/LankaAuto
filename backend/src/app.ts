@@ -5,6 +5,7 @@ import { categoriesRouter } from './routes/categories.js';
 import { brandsRouter } from './routes/brands.js';
 import { vehiclesRouter } from './routes/vehicles.js';
 import { authRouter } from './routes/auth.js';
+import { chatRouter } from './routes/chat.js';
 import { errorHandler } from './middleware/error-handler.js';
 
 /**
@@ -37,6 +38,7 @@ export function createApp() {
   app.use('/brands', brandsRouter);
   app.use('/vehicles', vehiclesRouter);
   app.use('/auth', authRouter);
+  app.use('/chat', chatRouter);
 
   app.use(errorHandler);
 

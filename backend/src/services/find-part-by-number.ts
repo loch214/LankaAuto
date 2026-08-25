@@ -23,6 +23,7 @@ export interface FuzzyPartMatch {
   readonly categoryName: string;
   readonly availabilityStatus: AvailabilityStatus;
   readonly location: string | null;
+  readonly lastVerifiedAt: Date | null;
   /** pg_trgm similarity, 0 (nothing shared) to 1 (identical). Higher is closer. */
   readonly similarity: number;
 }
@@ -69,6 +70,7 @@ export async function findPartByNumber(rawQuery: string): Promise<FindPartByNumb
       category_name: string;
       availability_status: AvailabilityStatus;
       location: string | null;
+      last_verified_at: Date | null;
       similarity: number;
     }[]
   >`
@@ -80,6 +82,7 @@ export async function findPartByNumber(rawQuery: string): Promise<FindPartByNumb
       c.name AS category_name,
       p.availability_status,
       p.location,
+      p.last_verified_at,
       similarity(p.part_number, ${code}) AS similarity
     FROM parts p
     LEFT JOIN brands b ON b.id = p.brand_id
@@ -100,6 +103,7 @@ export async function findPartByNumber(rawQuery: string): Promise<FindPartByNumb
       categoryName: r.category_name,
       availabilityStatus: r.availability_status,
       location: r.location,
+      lastVerifiedAt: r.last_verified_at,
       similarity: r.similarity,
     })),
   };

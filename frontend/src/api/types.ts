@@ -72,6 +72,24 @@ export interface PartListResponse {
 /** Which tier of `GET /parts/search` produced a hit — see `hybrid-part-search.ts`. */
 export type SearchMatchType = 'exact-number' | 'fuzzy-number' | 'semantic';
 
+// --- Chat (Phase 5) ---------------------------------------------------------
+
+export interface ChatCitation {
+  partId: string;
+  partNumber: string | null;
+  rawName: string;
+}
+
+export interface ChatTurnRequest {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatTurnResponse {
+  reply: string;
+  citations: ChatCitation[];
+}
+
 export interface SearchHit {
   partId: string;
   partNumber: string | null;
