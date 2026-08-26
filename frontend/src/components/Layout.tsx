@@ -16,6 +16,7 @@ function Wordmark({ className = '' }: { className?: string }) {
 export function Layout({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [scrolled, setScrolled] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
   // Customer agent only (Phase 5) — staff have their own fast-search tool
   // (StaffSearchPage), and the staff agent (PLAN.md §8) is a separate,
@@ -28,6 +29,19 @@ export function Layout({ children }: { children: ReactNode }) {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  // Below `sm`, the full nav (Browse Parts / Visit Us / phone / Staff
+  // Login) doesn't fit on one row without wrapping — confirmed via a real
+  // CDP mobile-viewport screenshot (390×844), not just guessed. The
+  // dropdown below is mobile-only; nothing at `sm:` and above changes.
+  // Closing it on navigation is done during render (React's documented
+  // "adjust state during render" pattern), not in an effect, so it
+  // doesn't trigger a second render pass just to flip one boolean.
+  const [mobileNavPathname, setMobileNavPathname] = useState(location.pathname);
+  if (location.pathname !== mobileNavPathname) {
+    setMobileNavPathname(location.pathname);
+    setMobileNavOpen(false);
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-graphite text-chalk">
@@ -46,14 +60,16 @@ export function Layout({ children }: { children: ReactNode }) {
             <span className="h-2 w-2 rounded-full bg-safety shadow-[0_0_10px_2px_rgba(255,90,31,0.6)]" />
             <Wordmark className="text-xl text-chalk transition-opacity group-hover:opacity-80 sm:text-2xl" />
           </Link>
-          <nav className="flex items-center gap-6 text-sm font-medium text-chalk/80 sm:gap-8">
+
+          {/* Desktop nav — unchanged from before, still `sm:` and up only. */}
+          <nav className="hidden items-center gap-6 text-sm font-medium text-chalk/80 sm:flex sm:gap-8">
             <Link to="/browse" className="relative py-1 transition-colors hover:text-white after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-safety after:transition-all hover:after:w-full">
               Browse Parts
             </Link>
-            <Link to="/visit" className="relative hidden py-1 transition-colors hover:text-white after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-safety after:transition-all hover:after:w-full sm:inline">
+            <Link to="/visit" className="relative py-1 transition-colors hover:text-white after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-safety after:transition-all hover:after:w-full">
               Visit Us
             </Link>
-            <a href={telHref(SHOP.phonePrimary)} className="hidden sm:flex items-center gap-2 text-safety hover:text-signal transition-colors font-bold">
+            <a href={telHref(SHOP.phonePrimary)} className="flex items-center gap-2 text-safety hover:text-signal transition-colors font-bold">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
               </svg>
@@ -66,7 +82,67 @@ export function Layout({ children }: { children: ReactNode }) {
               {user !== null ? 'Staff' : 'Staff Login'}
             </Link>
           </nav>
+
+          {/* Mobile nav trigger — below `sm` only. A compact Staff pill
+              (never "Staff Login", so it can't wrap) plus a hamburger that
+              opens the dropdown below for the links that don't fit. */}
+          <div className="flex items-center gap-3 sm:hidden">
+            <Link
+              to={user !== null ? '/staff' : '/staff/login'}
+              className="rounded-full border border-chalk/20 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-chalk shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-safety hover:bg-safety hover:text-white"
+            >
+              Staff
+            </Link>
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen((open) => !open)}
+              aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileNavOpen}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-chalk/20 text-chalk transition-colors hover:border-safety hover:text-safety"
+            >
+              {mobileNavOpen ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile dropdown — the links that don't fit in the top row on a
+            narrow screen. `sm:hidden` so it never renders once the full
+            desktop nav takes over. */}
+        {mobileNavOpen && (
+          <nav className="border-t border-white/5 bg-graphite px-6 py-4 sm:hidden">
+            <ul className="flex flex-col gap-1 text-sm font-medium text-chalk/80">
+              <li>
+                <Link to="/browse" className="block rounded-lg px-2 py-2.5 transition-colors hover:bg-white/5 hover:text-white">
+                  Browse Parts
+                </Link>
+              </li>
+              <li>
+                <Link to="/visit" className="block rounded-lg px-2 py-2.5 transition-colors hover:bg-white/5 hover:text-white">
+                  Visit Us
+                </Link>
+              </li>
+              <li>
+                <a
+                  href={telHref(SHOP.phonePrimary)}
+                  className="flex items-center gap-2 rounded-lg px-2 py-2.5 font-bold text-safety transition-colors hover:bg-white/5"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                  {SHOP.phonePrimary}
+                </a>
+              </li>
+            </ul>
+          </nav>
+        )}
       </header>
 
       <main className="flex-1">{children}</main>
