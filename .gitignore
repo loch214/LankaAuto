@@ -90,3 +90,4 @@ $RECYCLE.BIN/
 .vs/
 *.user
 *.suo
+.vercel
