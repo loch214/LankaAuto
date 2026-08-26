@@ -11,6 +11,46 @@ interface DisplayMessage {
   isError?: boolean;
 }
 
+/**
+ * The agent's replies are plain text, not markdown, but the system prompt
+ * asks it to write `-`-prefixed lines when listing parts (short, simple
+ * language, PLAN.md-adjacent tone change). Rendering those as a real `<ul>`
+ * reads noticeably cleaner than the raw dash sitting in a `whitespace-pre-wrap`
+ * block; any line that isn't a bullet still renders as a plain paragraph.
+ */
+function renderReply(content: string) {
+  const lines = content.split('\n');
+  const blocks: { type: 'text' | 'list'; lines: string[] }[] = [];
+
+  for (const line of lines) {
+    const isBullet = /^[-•]\s+/.test(line.trim());
+    const last = blocks[blocks.length - 1];
+    if (isBullet && last?.type === 'list') {
+      last.lines.push(line.trim().replace(/^[-•]\s+/, ''));
+    } else if (isBullet) {
+      blocks.push({ type: 'list', lines: [line.trim().replace(/^[-•]\s+/, '')] });
+    } else if (last?.type === 'text') {
+      last.lines.push(line);
+    } else {
+      blocks.push({ type: 'text', lines: [line] });
+    }
+  }
+
+  return blocks.map((block, i) =>
+    block.type === 'list' ? (
+      <ul key={i} className="my-1 list-disc space-y-0.5 pl-4">
+        {block.lines.map((line, j) => (
+          <li key={j}>{line}</li>
+        ))}
+      </ul>
+    ) : (
+      <p key={i} className="whitespace-pre-wrap">
+        {block.lines.join('\n')}
+      </p>
+    ),
+  );
+}
+
 const GREETING: DisplayMessage = {
   role: 'assistant',
   content: "Hi! Describe what you need, or give me a part number, and I'll check our catalogue.",
@@ -91,7 +131,7 @@ export function ChatWidget() {
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div
-                  className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
+                  className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
                     m.role === 'user'
                       ? 'bg-safety text-white'
                       : m.isError
@@ -99,7 +139,9 @@ export function ChatWidget() {
                         : 'bg-graphite/5 text-graphite'
                   }`}
                 >
-                  {m.content}
+                  {m.role === 'assistant' && !m.isError ? renderReply(m.content) : (
+                    <p className="whitespace-pre-wrap">{m.content}</p>
+                  )}
                   {m.citations !== undefined && m.citations.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5 border-t border-graphite/10 pt-2">
                       {m.citations.map((c) => (

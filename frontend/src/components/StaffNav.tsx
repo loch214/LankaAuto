@@ -20,6 +20,9 @@ export function StaffNav() {
         <NavLink to="/staff" end className={linkClass}>
           Search
         </NavLink>
+        <NavLink to="/staff/ingest" className={linkClass}>
+          Ingest price list
+        </NavLink>
         {user?.role === 'ADMIN' && (
           <>
             <NavLink to="/staff/users" className={linkClass}>

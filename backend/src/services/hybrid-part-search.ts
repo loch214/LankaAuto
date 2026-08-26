@@ -34,6 +34,9 @@ export interface PartSearchHit {
   readonly availabilityStatus: AvailabilityStatus;
   readonly location: string | null;
   readonly lastVerifiedAt: Date | null;
+  /** Staff/admin-only physical price-list citation. Only ever populated on this staff-gated endpoint — see `GET /parts/search`'s route comment. */
+  readonly folderLabel: string | null;
+  readonly recordNumber: string | null;
   readonly matchType: SearchMatchType;
 }
 
@@ -53,6 +56,8 @@ export async function hybridPartSearch(query: string, limit: number): Promise<Pa
       availabilityStatus: p.availabilityStatus,
       location: p.location,
       lastVerifiedAt: p.lastVerifiedAt,
+      folderLabel: p.folderLabel,
+      recordNumber: p.recordNumber,
       matchType: 'exact-number' as const,
     }));
   }
@@ -67,6 +72,8 @@ export async function hybridPartSearch(query: string, limit: number): Promise<Pa
       availabilityStatus: m.availabilityStatus,
       location: m.location,
       lastVerifiedAt: m.lastVerifiedAt,
+      folderLabel: m.folderLabel,
+      recordNumber: m.recordNumber,
       matchType: 'fuzzy-number' as const,
     }));
   }
@@ -84,6 +91,8 @@ export async function hybridPartSearch(query: string, limit: number): Promise<Pa
     availabilityStatus: m.availabilityStatus,
     location: m.location,
     lastVerifiedAt: m.lastVerifiedAt,
+    folderLabel: m.folderLabel,
+    recordNumber: m.recordNumber,
     matchType: 'semantic' as const,
   }));
 }

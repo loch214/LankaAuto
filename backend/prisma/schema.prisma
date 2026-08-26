@@ -160,6 +160,15 @@ model Part {
 
   location String?
 
+  /// Which physical price-list folder this part's record lives in (e.g.
+  /// "4 — Electrical Parts") and its record/line number within that price
+  /// list, so staff can pull the paper copy. Staff/admin only — never
+  /// selected by the customer-facing routes (`GET /parts`, `GET
+  /// /parts/:id`), which is the structural guarantee, not a UI hint (same
+  /// pattern as hiding availability from the customer chat agent).
+  folderLabel  String? @map("folder_label")
+  recordNumber String? @map("record_number")
+
   /// Derived from parseSource, not self-reported by the LLM.
   parseConfidence Float       @map("parse_confidence")
   parseSource     ParseSource @map("parse_source")
@@ -371,6 +380,11 @@ model IngestionRun {
 
   sourceFile String          @map("source_file")
   status     IngestionStatus @default(RUNNING)
+
+  /// The physical price-list folder this whole upload belongs to (e.g.
+  /// "4 — Electrical Parts"), entered once by staff at upload time and
+  /// copied onto every `Part` an approved row from this run produces.
+  folderLabel String? @map("folder_label")
 
   rowsTotal        Int @default(0) @map("rows_total")
   rowsParsedByRule Int @default(0) @map("rows_parsed_by_rule")

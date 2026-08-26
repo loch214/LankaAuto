@@ -24,6 +24,9 @@ export interface FuzzyPartMatch {
   readonly availabilityStatus: AvailabilityStatus;
   readonly location: string | null;
   readonly lastVerifiedAt: Date | null;
+  /** Staff/admin-only physical price-list citation — see the `Part` schema comment. Never surfaced to customer routes. */
+  readonly folderLabel: string | null;
+  readonly recordNumber: string | null;
   /** pg_trgm similarity, 0 (nothing shared) to 1 (identical). Higher is closer. */
   readonly similarity: number;
 }
@@ -71,6 +74,8 @@ export async function findPartByNumber(rawQuery: string): Promise<FindPartByNumb
       availability_status: AvailabilityStatus;
       location: string | null;
       last_verified_at: Date | null;
+      folder_label: string | null;
+      record_number: string | null;
       similarity: number;
     }[]
   >`
@@ -83,6 +88,8 @@ export async function findPartByNumber(rawQuery: string): Promise<FindPartByNumb
       p.availability_status,
       p.location,
       p.last_verified_at,
+      p.folder_label,
+      p.record_number,
       similarity(p.part_number, ${code}) AS similarity
     FROM parts p
     LEFT JOIN brands b ON b.id = p.brand_id
@@ -104,6 +111,8 @@ export async function findPartByNumber(rawQuery: string): Promise<FindPartByNumb
       availabilityStatus: r.availability_status,
       location: r.location,
       lastVerifiedAt: r.last_verified_at,
+      folderLabel: r.folder_label,
+      recordNumber: r.record_number,
       similarity: r.similarity,
     })),
   };

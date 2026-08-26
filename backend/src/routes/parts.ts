@@ -1,13 +1,45 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { AvailabilityStatus } from '@prisma/client';
+import { AvailabilityStatus, type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { buildPartWhere } from '../services/part-search.js';
 import { hybridPartSearch } from '../services/hybrid-part-search.js';
 import { checkFitment } from '../services/fitment.js';
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
+import { reembedPart } from '../services/ingestion/reembed-part.js';
 
 export const partsRouter = Router();
+
+/**
+ * Every `Part` scalar EXCEPT `folderLabel`/`recordNumber` — the structural
+ * guarantee that the customer-facing routes below (`GET /parts`, `GET
+ * /parts/:id`) cannot leak the staff-only physical price-list citation, the
+ * same way `services/agent/tools.ts` structurally withholds availability
+ * from the customer chat agent. An explicit allow-list here also means a
+ * future sensitive column added to `Part` is excluded by default, not
+ * included by default the way Prisma's no-`select` behavior would.
+ */
+const CUSTOMER_SAFE_PART_SELECT = {
+  id: true,
+  categoryId: true,
+  brandId: true,
+  rawName: true,
+  normalizedName: true,
+  partNumber: true,
+  attributes: true,
+  availabilityStatus: true,
+  lastVerifiedAt: true,
+  verifiedSource: true,
+  location: true,
+  parseConfidence: true,
+  parseSource: true,
+  needsReview: true,
+  sourceKey: true,
+  createdAt: true,
+  updatedAt: true,
+  brand: true,
+  category: true,
+} as const;
 
 const listQuerySchema = z.object({
   q: z.string().max(200).optional(),
@@ -48,7 +80,7 @@ partsRouter.get('/', async (req, res, next) => {
         // no fixed order among ties, so two paginated requests can order
         // them differently and a row gets skipped or duplicated across pages.
         orderBy: [{ normalizedName: 'asc' }, { id: 'asc' }],
-        include: { brand: true, category: true },
+        select: CUSTOMER_SAFE_PART_SELECT,
       }),
       prisma.part.count({ where }),
     ]);
@@ -77,16 +109,28 @@ const searchQuerySchema = z.object({
  * Declared before `/:id` — `/search` would otherwise fail the uuid check on
  * that route with a 400 rather than reaching this handler, which works but
  * is the wrong reason for it to work.
+ *
+ * Staff/admin only — not because the search itself is sensitive (`GET
+ * /parts` is wide open), but because results here carry `folderLabel`/
+ * `recordNumber`, the staff-only physical price-list citation. Locking this
+ * route down is the structural guarantee that data never reaches a
+ * customer, the same pattern used to hide availability from the customer
+ * chat agent (`services/agent/tools.ts`).
  */
-partsRouter.get('/search', async (req, res, next) => {
-  try {
-    const { q, limit } = searchQuerySchema.parse(req.query);
-    const hits = await hybridPartSearch(q, limit);
-    res.json({ hits });
-  } catch (err) {
-    next(err);
-  }
-});
+partsRouter.get(
+  '/search',
+  requireAuth,
+  requireRole('STAFF', 'ADMIN'),
+  async (req, res, next) => {
+    try {
+      const { q, limit } = searchQuerySchema.parse(req.query);
+      const hits = await hybridPartSearch(q, limit);
+      res.json({ hits });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 /**
  * A single bulk update is capped so one mistyped/broad filter can't rewrite
@@ -209,11 +253,7 @@ partsRouter.get('/:id', async (req, res, next) => {
 
     const part = await prisma.part.findUnique({
       where: { id },
-      include: {
-        brand: true,
-        category: true,
-        fitments: { include: { vehicle: true } },
-      },
+      select: { ...CUSTOMER_SAFE_PART_SELECT, fitments: { include: { vehicle: true } } },
     });
 
     if (part === null) {
@@ -311,6 +351,99 @@ partsRouter.patch(
       ]);
 
       res.json(part);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+const editPartSchema = z.object({
+  rawName: z.string().min(1).max(500).optional(),
+  categoryId: z.uuid().optional(),
+  brandId: z.uuid().nullable().optional(),
+  partNumber: z.string().min(1).max(100).nullable().optional(),
+  folderLabel: z.string().max(200).nullable().optional(),
+  recordNumber: z.string().max(100).nullable().optional(),
+});
+
+/**
+ * PATCH /parts/:id — staff-only catalogue editing (as opposed to the
+ * customer-invisible `folderLabel`/`recordNumber` fields, and separate from
+ * the one-tap availability PATCH above). Re-embeds immediately if any field
+ * that feeds `buildEmbeddingText` changed, so search doesn't go stale
+ * between edits and the next `npm run embed:parts`.
+ */
+partsRouter.patch(
+  '/:id',
+  requireAuth,
+  requireRole('STAFF', 'ADMIN'),
+  async (req, res, next) => {
+    try {
+      const { id } = idParamSchema.parse(req.params);
+      const body = editPartSchema.parse(req.body);
+
+      const existing = await prisma.part.findUnique({ where: { id } });
+      if (existing === null) {
+        res.status(404).json({ error: 'part not found' });
+        return;
+      }
+
+      // Built imperatively rather than via conditional spreads — several
+      // spreads merged into one object literal defeat Prisma's input-type
+      // inference here and collapse `categoryId` to `never`.
+      const data: Prisma.PartUpdateInput = {};
+      if (body.rawName !== undefined) {
+        data.rawName = body.rawName;
+        data.normalizedName = body.rawName.trim().replace(/\s+/g, ' ').toUpperCase();
+      }
+      if (body.categoryId !== undefined) {
+        data.category = { connect: { id: body.categoryId } };
+      }
+      if (body.brandId !== undefined) {
+        data.brand = body.brandId === null ? { disconnect: true } : { connect: { id: body.brandId } };
+      }
+      if (body.partNumber !== undefined) data.partNumber = body.partNumber;
+      if (body.folderLabel !== undefined) data.folderLabel = body.folderLabel;
+      if (body.recordNumber !== undefined) data.recordNumber = body.recordNumber;
+
+      const part = await prisma.part.update({ where: { id }, data });
+
+      const searchableFieldsChanged =
+        body.rawName !== undefined ||
+        body.categoryId !== undefined ||
+        body.brandId !== undefined ||
+        body.partNumber !== undefined;
+      if (searchableFieldsChanged) {
+        await reembedPart(id);
+      }
+
+      res.json(part);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * DELETE /parts/:id — staff-only hard delete. Dependent rows follow the
+ * schema's existing `onDelete` rules (e.g. `StagingRow.partId` →
+ * `SetNull`, `VerificationLog.partId` → whatever the schema already
+ * declares) — nothing extra to orchestrate here.
+ */
+partsRouter.delete(
+  '/:id',
+  requireAuth,
+  requireRole('STAFF', 'ADMIN'),
+  async (req, res, next) => {
+    try {
+      const { id } = idParamSchema.parse(req.params);
+      const existing = await prisma.part.findUnique({ where: { id } });
+      if (existing === null) {
+        res.status(404).json({ error: 'part not found' });
+        return;
+      }
+      await prisma.part.delete({ where: { id } });
+      res.json({ id });
     } catch (err) {
       next(err);
     }

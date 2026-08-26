@@ -98,7 +98,107 @@ export interface SearchHit {
   categoryName: string;
   availabilityStatus: AvailabilityStatus;
   location: string | null;
+  /** Staff/admin-only physical price-list citation — never present on customer-facing responses. */
+  folderLabel: string | null;
+  recordNumber: string | null;
   matchType: SearchMatchType;
+}
+
+// --- Catalogue CRUD (staff/admin) -------------------------------------------
+
+export interface EditPartInput {
+  rawName?: string;
+  categoryId?: string;
+  brandId?: string | null;
+  partNumber?: string | null;
+  folderLabel?: string | null;
+  recordNumber?: string | null;
+}
+
+export interface CreateCategoryInput {
+  name: string;
+  parentId?: string;
+}
+
+export interface CreateBrandInput {
+  name: string;
+  isOem?: boolean;
+  country?: string;
+  notes?: string;
+}
+
+// --- Price-list ingestion (staff/admin) -------------------------------------
+
+export interface IngestionPreview {
+  sourceFile: string;
+  headers: string[];
+  rows: Record<string, string>[];
+}
+
+export interface IngestionMapping {
+  category: string;
+  subCategory?: string;
+  brand?: string;
+  partNumber?: string;
+  rawName: string;
+  recordNumber?: string;
+  fitmentText?: string;
+}
+
+export interface IngestionImportResult {
+  runId: string;
+  rowsTotal: number;
+  rowsFlagged: number;
+}
+
+export interface IngestionRun {
+  id: string;
+  sourceFile: string;
+  folderLabel: string | null;
+  status: 'RUNNING' | 'COMPLETED' | 'FAILED';
+  rowsTotal: number;
+  rowsParsedByRule: number;
+  rowsParsedByLlm: number;
+  rowsFlagged: number;
+  rowsFailed: number;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface StagingRowParsedAttributes {
+  categoryName: string;
+  categoryId: string | null;
+  brandName: string | null;
+  brandId: string | null;
+  partNumber: string | null;
+  recordNumber: string | null;
+  fitmentText: string | null;
+}
+
+export interface StagingRow {
+  id: string;
+  runId: string;
+  rowNumber: number;
+  raw: Record<string, string>;
+  rawName: string;
+  normalizedName: string | null;
+  parsedAttributes: StagingRowParsedAttributes | null;
+  error: string | null;
+  partId: string | null;
+  processedAt: string | null;
+}
+
+export interface ApproveRowResult {
+  ok: true;
+  partId: string;
+  embedded: boolean;
+  embedError?: string;
+}
+
+export interface ApproveCleanResult {
+  attempted: number;
+  approved: number;
+  embedFailed: number;
 }
 
 // --- Staff accounts (admin-only) --------------------------------------------

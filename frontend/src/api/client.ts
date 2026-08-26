@@ -1,4 +1,6 @@
 import type {
+  ApproveCleanResult,
+  ApproveRowResult,
   AvailabilityStatus,
   Brand,
   BulkAvailabilityParams,
@@ -6,11 +8,19 @@ import type {
   Category,
   ChatTurnRequest,
   ChatTurnResponse,
+  CreateBrandInput,
+  CreateCategoryInput,
   CreateStaffAccountInput,
+  EditPartInput,
+  IngestionImportResult,
+  IngestionMapping,
+  IngestionPreview,
+  IngestionRun,
   PartDetail,
   PartListResponse,
   SearchHit,
   StaffAccount,
+  StagingRow,
   StockSummaryReport,
   StaleParts,
   ActivityLog,
@@ -80,6 +90,19 @@ async function authedRequest<T>(
   return res.json() as Promise<T>;
 }
 
+/** Multipart upload (the ingestion file), auth'd — no `Content-Type` header, so the browser sets its own multipart boundary. */
+async function authedUpload<T>(path: string, token: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(new URL(path, API_BASE_URL), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res));
+  return res.json() as Promise<T>;
+}
+
 export interface PartListParams {
   q?: string;
   categorySlug?: string;
@@ -104,9 +127,12 @@ export const api = {
   // Hybrid search (PLAN.md §10 Phase 3) — exact/fuzzy part number, falling
   // back to semantic description search. Distinct from `listParts`: this is
   // "I don't know what filters to pick, I just have a number or a
-  // description," used by the staff fast-search screen.
-  searchParts: (q: string, limit = 10) =>
-    get<{ hits: SearchHit[] }>('/parts/search', { q, limit }).then((r) => r.hits),
+  // description," used by the staff fast-search screen. Staff/admin only —
+  // results carry the folder/record physical-price-list citation.
+  searchParts: (token: string, q: string, limit = 10) =>
+    authedRequest<{ hits: SearchHit[] }>('GET', `/parts/search?q=${encodeURIComponent(q)}&limit=${limit}`, token).then(
+      (r) => r.hits,
+    ),
   // Phase 5 customer chat agent (PLAN.md §10) — stateless on the server, so
   // every call sends the full conversation so far, including the new user
   // message at the end. See `routes/chat.ts`.
@@ -154,4 +180,48 @@ export const api = {
     authedRequest<ActivityLog>('GET', `/reports/activity?limit=${limit}&offset=${offset}`, token),
   getOutOfStock: (token: string, limit = 50, offset = 0) =>
     authedRequest<OutOfStockParts>('GET', `/reports/out-of-stock?limit=${limit}&offset=${offset}`, token),
+
+  // Catalogue CRUD (staff/admin — backend: routes/parts.ts, categories.ts, brands.ts).
+  editPart: (token: string, id: string, input: EditPartInput) =>
+    authedRequest<PartDetail>('PATCH', `/parts/${id}`, token, input),
+  deletePart: (token: string, id: string) => authedRequest<{ id: string }>('DELETE', `/parts/${id}`, token),
+  createCategory: (token: string, input: CreateCategoryInput) =>
+    authedRequest<Category>('POST', '/categories', token, input),
+  updateCategory: (token: string, id: string, input: Partial<CreateCategoryInput>) =>
+    authedRequest<Category>('PATCH', `/categories/${id}`, token, input),
+  createBrand: (token: string, input: CreateBrandInput) => authedRequest<Brand>('POST', '/brands', token, input),
+  updateBrand: (token: string, id: string, input: Partial<CreateBrandInput>) =>
+    authedRequest<Brand>('PATCH', `/brands/${id}`, token, input),
+
+  // Price-list ingestion (staff/admin — backend: routes/ingestion.ts).
+  previewIngestion: (token: string, file: File) => authedUpload<IngestionPreview>('/ingestion/preview', token, file),
+  importIngestion: (
+    token: string,
+    input: { sourceFile: string; folderLabel?: string; mapping: IngestionMapping; rows: Record<string, string>[] },
+  ) => authedRequest<IngestionImportResult>('POST', '/ingestion/import', token, input),
+  listIngestionRuns: (token: string) =>
+    authedRequest<{ runs: IngestionRun[] }>('GET', '/ingestion/runs', token).then((r) => r.runs),
+  listStagingRows: (token: string, runId: string, pending = true) =>
+    authedRequest<{ rows: StagingRow[] }>('GET', `/ingestion/runs/${runId}/rows?pending=${pending}`, token).then(
+      (r) => r.rows,
+    ),
+  patchStagingRow: (
+    token: string,
+    rowId: string,
+    input: {
+      rawName?: string;
+      partNumber?: string | null;
+      recordNumber?: string | null;
+      categoryId?: string;
+      newCategoryName?: string;
+      brandId?: string | null;
+      newBrandName?: string;
+    },
+  ) => authedRequest<StagingRow>('PATCH', `/ingestion/rows/${rowId}`, token, input),
+  approveStagingRow: (token: string, rowId: string) =>
+    authedRequest<ApproveRowResult>('POST', `/ingestion/rows/${rowId}/approve`, token),
+  rejectStagingRow: (token: string, rowId: string, reason?: string) =>
+    authedRequest<StagingRow>('POST', `/ingestion/rows/${rowId}/reject`, token, { reason }),
+  approveCleanRows: (token: string, runId: string) =>
+    authedRequest<ApproveCleanResult>('POST', `/ingestion/runs/${runId}/approve-clean`, token),
 };

@@ -8,6 +8,7 @@ import { authRouter } from './routes/auth.js';
 import { chatRouter } from './routes/chat.js';
 import { usersRouter } from './routes/users.js';
 import { reportsRouter } from './routes/reports.js';
+import { ingestionRouter } from './routes/ingestion.js';
 import { errorHandler } from './middleware/error-handler.js';
 
 /**
@@ -43,6 +44,7 @@ export function createApp() {
   app.use('/chat', chatRouter);
   app.use('/users', usersRouter);
   app.use('/reports', reportsRouter);
+  app.use('/ingestion', ingestionRouter);
 
   app.use(errorHandler);
 

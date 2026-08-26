@@ -1,7 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import supertest from 'supertest';
 import { createApp } from '../app.js';
 import { prisma, disconnect } from '../lib/prisma.js';
+
+// PATCH /parts/:id re-embeds on a searchable-field change, which would
+// otherwise hit the real Gemini API — stubbed for the same reason
+// `ingestion.test.ts` stubs it (see `embeddings.test.ts`'s comment).
+vi.mock('../services/ingestion/reembed-part.js', () => ({
+  reembedPart: vi.fn().mockResolvedValue(undefined),
+}));
 
 // These run against the real dev database (docker-compose `lankaauto-db`),
 // same as `check-db.ts` and the ingestion script — no mocked Prisma client.
@@ -98,6 +105,24 @@ describe('GET /parts', () => {
     expect(res.status).toBe(200);
     expect(res.body.total).toBe(0);
   });
+
+  it('never includes folderLabel/recordNumber — the staff-only citation must not reach this customer-facing route', async () => {
+    const part = await prisma.part.findFirstOrThrow();
+    await prisma.part.update({
+      where: { id: part.id },
+      data: { folderLabel: '4 — Electrical Parts', recordNumber: '17' },
+    });
+    try {
+      const res = await request.get('/parts').query({ q: part.partNumber ?? part.rawName });
+      expect(res.status).toBe(200);
+      for (const p of res.body.parts) {
+        expect(p).not.toHaveProperty('folderLabel');
+        expect(p).not.toHaveProperty('recordNumber');
+      }
+    } finally {
+      await prisma.part.update({ where: { id: part.id }, data: { folderLabel: null, recordNumber: null } });
+    }
+  });
 });
 
 describe('GET /parts/search', () => {
@@ -106,8 +131,31 @@ describe('GET /parts/search', () => {
   // which this suite deliberately never does (`embeddings.test.ts` stubs
   // `fetch` for exactly that reason); semantic quality is what `npm run eval`
   // is for, against the checked-in eval set.
+  const TEST_USERNAME = 'search-test-staff';
+  const TEST_PASSWORD = 'correct horse battery staple';
+  let staffToken: string;
+
+  beforeAll(async () => {
+    const { hashPassword } = await import('../lib/auth.js');
+    const passwordHash = await hashPassword(TEST_PASSWORD);
+    await prisma.user.upsert({
+      where: { username: TEST_USERNAME },
+      create: { name: 'Search Test Staff', username: TEST_USERNAME, passwordHash, role: 'STAFF' },
+      update: { passwordHash, role: 'STAFF', isActive: true },
+    });
+    const login = await request.post('/auth/login').send({ username: TEST_USERNAME, password: TEST_PASSWORD });
+    staffToken = login.body.token;
+  });
+
+  afterAll(async () => {
+    await prisma.user.deleteMany({ where: { username: TEST_USERNAME } });
+  });
+
   it('returns an exact-number hit when the query is a real code', async () => {
-    const res = await request.get('/parts/search').query({ q: 'gu 1000 hd' });
+    const res = await request
+      .get('/parts/search')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .query({ q: 'gu 1000 hd' });
     expect(res.status).toBe(200);
     expect(res.body.hits.length).toBeGreaterThan(0);
     expect(res.body.hits[0].matchType).toBe('exact-number');
@@ -115,7 +163,10 @@ describe('GET /parts/search', () => {
   });
 
   it('falls back to a fuzzy-number hit for a near-miss code', async () => {
-    const res = await request.get('/parts/search').query({ q: 'GU1000H' });
+    const res = await request
+      .get('/parts/search')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .query({ q: 'GU1000H' });
     expect(res.status).toBe(200);
     expect(res.body.hits.length).toBeGreaterThan(0);
     expect(res.body.hits.every((h: { matchType: string }) => h.matchType === 'fuzzy-number')).toBe(true);
@@ -123,13 +174,24 @@ describe('GET /parts/search', () => {
   });
 
   it('rejects a blank q with a 400, not an empty-string semantic call', async () => {
-    const res = await request.get('/parts/search').query({ q: '' });
+    const res = await request
+      .get('/parts/search')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .query({ q: '' });
     expect(res.status).toBe(400);
   });
 
   it('caps limit at 20', async () => {
-    const res = await request.get('/parts/search').query({ q: 'gu', limit: '500' });
+    const res = await request
+      .get('/parts/search')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .query({ q: 'gu', limit: '500' });
     expect(res.status).toBe(400);
+  });
+
+  it('401s with no auth token', async () => {
+    const res = await request.get('/parts/search').query({ q: 'gu' });
+    expect(res.status).toBe(401);
   });
 });
 
@@ -154,6 +216,22 @@ describe('GET /parts/:id', () => {
   it('returns 400 for a malformed id rather than a 500', async () => {
     const res = await request.get('/parts/not-a-uuid');
     expect(res.status).toBe(400);
+  });
+
+  it('never includes folderLabel/recordNumber — the staff-only citation must not reach this customer-facing route', async () => {
+    const part = await prisma.part.findFirstOrThrow();
+    await prisma.part.update({
+      where: { id: part.id },
+      data: { folderLabel: '4 — Electrical Parts', recordNumber: '17' },
+    });
+    try {
+      const res = await request.get(`/parts/${part.id}`);
+      expect(res.status).toBe(200);
+      expect(res.body).not.toHaveProperty('folderLabel');
+      expect(res.body).not.toHaveProperty('recordNumber');
+    } finally {
+      await prisma.part.update({ where: { id: part.id }, data: { folderLabel: null, recordNumber: null } });
+    }
   });
 });
 
@@ -328,5 +406,84 @@ describe('PATCH /parts/:id/availability', () => {
       const { BULK_UPDATE_LIMIT } = await import('./parts.js');
       expect(BULK_UPDATE_LIMIT).toBe(5000);
     });
+  });
+});
+
+describe('PATCH /parts/:id and DELETE /parts/:id', () => {
+  const TEST_USERNAME = 'part-crud-test-staff';
+  const TEST_PASSWORD = 'correct horse battery staple';
+  let staffToken: string;
+  let categoryId: string;
+
+  beforeAll(async () => {
+    const { hashPassword } = await import('../lib/auth.js');
+    const passwordHash = await hashPassword(TEST_PASSWORD);
+    await prisma.user.upsert({
+      where: { username: TEST_USERNAME },
+      create: { name: 'Part CRUD Test Staff', username: TEST_USERNAME, passwordHash, role: 'STAFF' },
+      update: { passwordHash, role: 'STAFF', isActive: true },
+    });
+    const login = await request.post('/auth/login').send({ username: TEST_USERNAME, password: TEST_PASSWORD });
+    staffToken = login.body.token;
+    categoryId = (await prisma.category.findFirstOrThrow({ where: { slug: 'u-joints' } })).id;
+  });
+
+  afterAll(async () => {
+    await prisma.user.deleteMany({ where: { username: TEST_USERNAME } });
+  });
+
+  async function createTestPart() {
+    return prisma.part.create({
+      data: {
+        categoryId,
+        rawName: 'CRUD test part',
+        normalizedName: 'CRUD TEST PART',
+        partNumber: 'ZZ-CRUD-TEST',
+        parseConfidence: 1,
+        parseSource: 'MANUAL',
+        sourceKey: `CRUD-TEST|${Date.now()}`,
+      },
+    });
+  }
+
+  it('401s with no auth token', async () => {
+    const part = await createTestPart();
+    const res = await request.patch(`/parts/${part.id}`).send({ rawName: 'x' });
+    expect(res.status).toBe(401);
+    await prisma.part.delete({ where: { id: part.id } });
+  });
+
+  it('edits rawName/folderLabel/recordNumber and re-embeds on a searchable-field change', async () => {
+    const part = await createTestPart();
+    const res = await request
+      .patch(`/parts/${part.id}`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({ rawName: 'Renamed CRUD test part', folderLabel: '4 — Electrical Parts', recordNumber: '9' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.rawName).toBe('Renamed CRUD test part');
+    expect(res.body.normalizedName).toBe('RENAMED CRUD TEST PART');
+    expect(res.body.folderLabel).toBe('4 — Electrical Parts');
+    expect(res.body.recordNumber).toBe('9');
+
+    const { reembedPart } = await import('../services/ingestion/reembed-part.js');
+    expect(reembedPart).toHaveBeenCalledWith(part.id);
+
+    await prisma.part.delete({ where: { id: part.id } });
+  });
+
+  it('404s for a well-formed id that does not exist', async () => {
+    const res = await request
+      .patch('/parts/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({ rawName: 'x' });
+    expect(res.status).toBe(404);
+  });
+
+  it('deletes a part', async () => {
+    const part = await createTestPart();
+    const res = await request.delete(`/parts/${part.id}`).set('Authorization', `Bearer ${staffToken}`);
+    expect(res.status).toBe(200);
+    expect(await prisma.part.findUnique({ where: { id: part.id } })).toBeNull();
   });
 });

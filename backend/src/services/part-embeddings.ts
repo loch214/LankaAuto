@@ -95,6 +95,9 @@ export interface NearestPartDetail extends NearestPart {
   readonly availabilityStatus: AvailabilityStatus;
   readonly location: string | null;
   readonly lastVerifiedAt: Date | null;
+  /** Staff/admin-only physical price-list citation — see the `Part` schema comment. Never surfaced to customer routes. */
+  readonly folderLabel: string | null;
+  readonly recordNumber: string | null;
 }
 
 /**
@@ -118,6 +121,8 @@ export async function nearestPartsWithDetails(queryVector: readonly number[], li
       availability_status: AvailabilityStatus;
       location: string | null;
       last_verified_at: Date | null;
+      folder_label: string | null;
+      record_number: string | null;
       distance: number;
     }[]
   >`
@@ -130,6 +135,8 @@ export async function nearestPartsWithDetails(queryVector: readonly number[], li
       p.availability_status,
       p.location,
       p.last_verified_at,
+      p.folder_label,
+      p.record_number,
       (pe.embedding <=> ${literal}::vector) AS distance
     FROM part_embeddings pe
     JOIN parts p ON p.id = pe.part_id
@@ -148,6 +155,8 @@ export async function nearestPartsWithDetails(queryVector: readonly number[], li
     availabilityStatus: r.availability_status,
     location: r.location,
     lastVerifiedAt: r.last_verified_at,
+    folderLabel: r.folder_label,
+    recordNumber: r.record_number,
     distance: r.distance,
   }));
 }

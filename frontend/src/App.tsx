@@ -8,6 +8,8 @@ import { StaffLoginPage } from './pages/StaffLoginPage';
 import { StaffSearchPage } from './pages/StaffSearchPage';
 import { StaffUsersPage } from './pages/StaffUsersPage';
 import { StaffReportsPage } from './pages/StaffReportsPage';
+import { StaffIngestPage } from './pages/StaffIngestPage';
+import { StaffIngestReviewPage } from './pages/StaffIngestReviewPage';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 
 export default function App() {
@@ -24,6 +26,22 @@ export default function App() {
           element={
             <ProtectedRoute>
               <StaffSearchPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff/ingest"
+          element={
+            <ProtectedRoute>
+              <StaffIngestPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff/ingest/:runId"
+          element={
+            <ProtectedRoute>
+              <StaffIngestReviewPage />
             </ProtectedRoute>
           }
         />

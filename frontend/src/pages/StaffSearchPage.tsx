@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { AvailabilityStatus, SearchMatchType } from '../api/types';
+import type { AvailabilityStatus, Brand, Category, PartDetail, SearchMatchType } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { PartTag } from '../components/PartTag';
 import { StaffNav } from '../components/StaffNav';
@@ -27,6 +27,9 @@ interface ResultRow {
   location: string | null;
   availabilityStatus: AvailabilityStatus;
   matchType?: SearchMatchType;
+  /** Staff/admin-only physical price-list citation — only present when the hybrid search endpoint produced this row. */
+  folderLabel?: string | null;
+  recordNumber?: string | null;
 }
 
 /**
@@ -66,7 +69,7 @@ export function StaffSearchPage() {
 
   const searchQuery = useQuery({
     queryKey: ['staff-parts-search', trimmedQ],
-    queryFn: () => api.searchParts(trimmedQ, 20),
+    queryFn: () => api.searchParts(token!, trimmedQ, 20),
     enabled: useSearch,
   });
 
@@ -80,6 +83,8 @@ export function StaffSearchPage() {
         location: h.location,
         availabilityStatus: h.availabilityStatus,
         matchType: h.matchType,
+        folderLabel: h.folderLabel,
+        recordNumber: h.recordNumber,
       }))
     : (partsQuery.data?.parts ?? []).map((p) => ({
         id: p.id,
@@ -96,6 +101,41 @@ export function StaffSearchPage() {
       void queryClient.invalidateQueries({ queryKey: ['staff-parts-browse'] });
       void queryClient.invalidateQueries({ queryKey: ['staff-parts-search'] });
     },
+  });
+
+  // --- Edit / delete a single part. Editing fetches the full part detail
+  // lazily (search hits don't carry categoryId/brandId, only names) rather
+  // than threading those ids through every result shape.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editPartDetail = useQuery({
+    queryKey: ['part-detail', editingId],
+    queryFn: () => api.getPart(editingId!),
+    enabled: editingId !== null,
+  });
+
+  function invalidatePartLists() {
+    void queryClient.invalidateQueries({ queryKey: ['staff-parts-browse'] });
+    void queryClient.invalidateQueries({ queryKey: ['staff-parts-search'] });
+  }
+
+  const editMutation = useMutation({
+    mutationFn: (input: {
+      rawName: string;
+      categoryId: string;
+      brandId: string | null;
+      partNumber: string | null;
+      folderLabel: string | null;
+      recordNumber: string | null;
+    }) => api.editPart(token!, editingId!, input),
+    onSuccess: () => {
+      invalidatePartLists();
+      setEditingId(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (partId: string) => api.deletePart(token!, partId),
+    onSuccess: invalidatePartLists,
   });
 
   // --- Bulk update: filter (category and/or brand, optionally plus q) → dry-run preview → confirm → apply.
@@ -235,10 +275,10 @@ export function StaffSearchPage() {
         {!isLoading && !isError && (
           <ul className="mt-4 divide-y divide-muted/20 rounded-sm border border-muted/30 bg-white">
             {results.map((part) => (
-              <li key={part.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <li key={part.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
                   <p className="font-medium text-graphite">{part.rawName}</p>
-                  <p className="mt-1 flex items-center gap-2 text-sm text-muted">
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
                     {part.partNumber && <PartTag>{part.partNumber}</PartTag>}
                     <span>{part.location ?? 'no location on file'}</span>
                     {part.matchType && part.matchType !== 'exact-number' && (
@@ -247,9 +287,37 @@ export function StaffSearchPage() {
                       </span>
                     )}
                   </p>
+                  {(part.folderLabel || part.recordNumber) && (
+                    <p className="mt-1 text-xs text-muted/80">
+                      Price list:{' '}
+                      {[part.folderLabel, part.recordNumber && `record ${part.recordNumber}`]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  )}
+
+                  {editingId === part.id && (
+                    <EditPartForm
+                      detail={editPartDetail.data ?? null}
+                      // The customer-safe `GET /parts/:id` this form's detail
+                      // query hits never carries folderLabel/recordNumber —
+                      // by design (see `CUSTOMER_SAFE_PART_SELECT`). This
+                      // row's own value (present only when it came from the
+                      // staff search endpoint) is the only place to seed
+                      // them from.
+                      currentFolderLabel={part.folderLabel ?? null}
+                      currentRecordNumber={part.recordNumber ?? null}
+                      isLoading={editPartDetail.isLoading}
+                      categories={categoriesQuery.data ?? []}
+                      brands={brandsQuery.data ?? []}
+                      isSaving={editMutation.isPending}
+                      onCancel={() => setEditingId(null)}
+                      onSave={(input) => editMutation.mutate(input)}
+                    />
+                  )}
                 </div>
 
-                <div className="flex gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {STATUS_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
@@ -265,6 +333,25 @@ export function StaffSearchPage() {
                       {opt.label}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(editingId === part.id ? null : part.id)}
+                    className="rounded-sm border border-muted/40 px-2.5 py-1 text-xs font-medium text-graphite hover:border-safety"
+                  >
+                    {editingId === part.id ? 'Close' : 'Edit'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Delete "${part.rawName}"? This cannot be undone.`)) {
+                        deleteMutation.mutate(part.id);
+                      }
+                    }}
+                    className="rounded-sm border border-muted/40 px-2.5 py-1 text-xs font-medium text-red-700 hover:border-red-600 disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
                 </div>
               </li>
             ))}
@@ -275,5 +362,157 @@ export function StaffSearchPage() {
         )}
       </div>
     </div>
+  );
+}
+
+interface EditPartFormProps {
+  detail: PartDetail | null;
+  currentFolderLabel: string | null;
+  currentRecordNumber: string | null;
+  isLoading: boolean;
+  categories: Category[];
+  brands: Brand[];
+  isSaving: boolean;
+  onCancel: () => void;
+  onSave: (input: {
+    rawName: string;
+    categoryId: string;
+    brandId: string | null;
+    partNumber: string | null;
+    folderLabel: string | null;
+    recordNumber: string | null;
+  }) => void;
+}
+
+/** Inline edit form for one part — fields prefilled once the full part detail loads. */
+function EditPartForm({
+  detail,
+  currentFolderLabel,
+  currentRecordNumber,
+  isLoading,
+  categories,
+  brands,
+  isSaving,
+  onCancel,
+  onSave,
+}: EditPartFormProps) {
+  const [rawName, setRawName] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [brandId, setBrandId] = useState('');
+  const [partNumber, setPartNumber] = useState('');
+  const [folderLabel, setFolderLabel] = useState('');
+  const [recordNumber, setRecordNumber] = useState('');
+  const [hydrated, setHydrated] = useState(false);
+
+  if (detail !== null && !hydrated) {
+    setRawName(detail.rawName);
+    setCategoryId(detail.category.id);
+    setBrandId(detail.brand?.id ?? '');
+    setPartNumber(detail.partNumber ?? '');
+    setFolderLabel(currentFolderLabel ?? '');
+    setRecordNumber(currentRecordNumber ?? '');
+    setHydrated(true);
+  }
+
+  if (isLoading || !hydrated) {
+    return <p className="mt-2 text-sm text-muted">Loading part details…</p>;
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({
+          rawName,
+          categoryId,
+          brandId: brandId === '' ? null : brandId,
+          partNumber: partNumber.trim() === '' ? null : partNumber.trim(),
+          folderLabel: folderLabel.trim() === '' ? null : folderLabel.trim(),
+          recordNumber: recordNumber.trim() === '' ? null : recordNumber.trim(),
+        });
+      }}
+      className="mt-2 flex flex-col gap-2 rounded-sm border border-muted/30 bg-chalk p-3"
+    >
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Description
+          <input
+            value={rawName}
+            onChange={(e) => setRawName(e.target.value)}
+            className="rounded-sm border border-muted/40 bg-white px-2 py-1 text-sm text-graphite"
+          />
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Part number
+          <input
+            value={partNumber}
+            onChange={(e) => setPartNumber(e.target.value)}
+            className="rounded-sm border border-muted/40 bg-white px-2 py-1 font-mono text-sm text-graphite"
+          />
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Category
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            className="rounded-sm border border-muted/40 bg-white px-2 py-1 text-sm text-graphite"
+          >
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Brand
+          <select
+            value={brandId}
+            onChange={(e) => setBrandId(e.target.value)}
+            className="rounded-sm border border-muted/40 bg-white px-2 py-1 text-sm text-graphite"
+          >
+            <option value="">No brand</option>
+            {brands.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Price-list folder (staff only)
+          <input
+            value={folderLabel}
+            onChange={(e) => setFolderLabel(e.target.value)}
+            placeholder="e.g. 4 — Electrical Parts"
+            className="rounded-sm border border-muted/40 bg-white px-2 py-1 text-sm text-graphite"
+          />
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted">
+          Record number (staff only)
+          <input
+            value={recordNumber}
+            onChange={(e) => setRecordNumber(e.target.value)}
+            className="rounded-sm border border-muted/40 bg-white px-2 py-1 text-sm text-graphite"
+          />
+        </label>
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={isSaving || rawName.trim() === '' || categoryId === ''}
+          className="rounded-sm bg-safety px-3 py-1.5 text-sm font-semibold text-graphite hover:bg-signal disabled:opacity-50"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-sm border border-muted/40 px-3 py-1.5 text-sm text-graphite"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
