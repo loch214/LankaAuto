@@ -95,8 +95,8 @@ export function BrandMarquee({
         render at a comparable size. Row 2's part logos are 2:1 and already
         fill their tile.
       */}
-      {r1.length > 0 && <Row brands={r1} direction="right" duration={190} padding="px-5 py-2.5" />}
-      {r2.length > 0 && <Row brands={r2} direction="left" duration={240} padding="px-7 py-6" />}
+      {r1.length > 0 && <Row brands={r1} direction="right" duration={150} padding="px-5 py-2.5" />}
+      {r2.length > 0 && <Row brands={r2} direction="left" duration={190} padding="px-7 py-6" />}
     </div>
   );
 }
