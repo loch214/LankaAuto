@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { SHOP, telHref } from '../shopInfo';
 import { ChatWidget } from './ChatWidget';
+import { useSmoothScroll } from '../hooks/useSmoothScroll';
 
 function Wordmark({ className = '' }: { className?: string }) {
   return (
@@ -14,6 +15,7 @@ function Wordmark({ className = '' }: { className?: string }) {
 
 /** Nav + footer shared by every page. */
 export function Layout({ children }: { children: ReactNode }) {
+  useSmoothScroll();
   const { user } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);

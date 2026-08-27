@@ -47,12 +47,14 @@ function Row({
       {doubled.map((brand, i) => (
         <div
           key={`${brand.id}-${i}`}
-          className={`group mx-3 flex h-28 w-48 shrink-0 items-center justify-center rounded-xl bg-white ${padding} shadow-[0_2px_12px_rgba(0,0,0,0.35)] transition-all duration-500 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-10px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,90,31,0.55)]`}
+          className={`group mx-3 flex h-28 w-48 shrink-0 items-center justify-center rounded-xl bg-white ${padding} shadow-elevated transition-all duration-500 ease-out hover:-translate-y-1.5 hover:shadow-elevated-hover`}
         >
           {brand.logo ? (
             <img
               src={brand.logo}
               alt={brand.name}
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-contain transition-transform duration-500 ease-out group-hover:scale-105"
             />
           ) : (

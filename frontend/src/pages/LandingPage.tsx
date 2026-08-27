@@ -1,8 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion';
 import { BrandMarquee } from '../components/BrandMarquee';
 import { useReveal } from '../hooks/useReveal';
 import { SHOP, shopAddress, telHref } from '../shopInfo';
+
+// Every source photo also has a WebP sibling (see
+// frontend/public/images/ — generated via ffmpeg's libwebp encoder,
+// ~85-90% smaller than the JPEG). <picture> serves WebP first, falling
+// back to the JPEG for any browser that doesn't support it.
+function webpSrc(jpgPath: string) {
+  return jpgPath.replace(/\.jpg$/, '.webp');
+}
 
 const VEHICLE_BRANDS = [
   { id: '1', name: 'Toyota', logo: '/images/brands/toyota.jpg' },
@@ -91,36 +100,70 @@ export function LandingPage() {
   const { sectionRef: brandsRef, className: brandsRevealClass } = useReveal<HTMLElement>();
   const { sectionRef: contactRef, className: contactRevealClass } = useReveal<HTMLElement>();
 
+  // Restrained scroll-linked depth: translateY only, small ranges, and
+  // fully disabled under prefers-reduced-motion. This is the whole "3D
+  // feel" — no rotation/tilt/scale, which is what the user explicitly
+  // called out as the cheap-looking failure mode.
+  const reduceMotion = useReducedMotion();
+  const parallaxRange = reduceMotion === true ? 0 : 1;
+
+  const heroRef = useRef<HTMLElement>(null);
+  const { scrollYProgress: heroProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
+  const heroBgY = useTransform(heroProgress, [0, 1], [0, 50 * parallaxRange]);
+  const heroContentY = useTransform(heroProgress, [0, 1], [0, -70 * parallaxRange]);
+
+  // browseRef/visitRef are already attached to their <section> via
+  // useReveal — useScroll only reads .current, so the same ref object can
+  // drive both the IntersectionObserver reveal and this scroll progress.
+  const { scrollYProgress: browseProgress } = useScroll({ target: browseRef, offset: ['start end', 'end start'] });
+  const browseImageY = useTransform(browseProgress, [0, 1], [-30 * parallaxRange, 30 * parallaxRange]);
+  const browseTextY = useTransform(browseProgress, [0, 1], [30 * parallaxRange, -30 * parallaxRange]);
+
+  const { scrollYProgress: visitProgress } = useScroll({ target: visitRef, offset: ['start end', 'end start'] });
+  const visitImageY = useTransform(visitProgress, [0, 1], [-30 * parallaxRange, 30 * parallaxRange]);
+  const visitTextY = useTransform(visitProgress, [0, 1], [30 * parallaxRange, -30 * parallaxRange]);
+
   return (
     <div className="bg-graphite">
       {/* ═══════ 1 — HERO ═══════ */}
-      <section className="relative flex h-screen min-h-[600px] flex-col items-center justify-center overflow-hidden bg-graphite">
-        {/* Animated background slider */}
-        <div className="absolute inset-0 z-0 bg-graphite">
+      <section ref={heroRef} className="relative flex h-screen min-h-[600px] flex-col items-center justify-center overflow-hidden bg-graphite">
+        {/* Animated background slider. Translated slightly slower than the
+            foreground content below as the section scrolls past — the
+            background lagging the foreground is what reads as depth. The
+            parent stays put and slightly oversized (inset-0 on a h-screen
+            section) so the small translate never reveals a seam; any sliver
+            it does uncover matches bg-graphite exactly. */}
+        <motion.div style={{ y: heroBgY }} className="absolute inset-0 z-0 bg-graphite">
           {SLIDER_IMAGES.map((src, i) => (
             <div
               key={src}
               className={`absolute inset-0 transition-opacity duration-[2000ms] ease-in-out ${i === currentSlide ? 'opacity-50' : 'opacity-0'
                 }`}
             >
-              <img
-                src={src}
-                alt=""
-                // Always animating (not gated on i === currentSlide) so the
-                // zoom never gets removed-then-reapplied on a slide switch —
-                // that reset was visible as a jarring snap-back-to-normal-
-                // size mid-fade. Running continuously means whichever phase
-                // of the cycle a slide is in when it fades in is just where
-                // it is; nothing ever resets.
-                className="h-full w-full object-cover animate-[ken-burns_20s_ease-in-out_infinite_alternate]"
-              />
+              <picture className="contents">
+                <source srcSet={webpSrc(src)} type="image/webp" />
+                <img
+                  src={src}
+                  alt=""
+                  width={1376}
+                  height={768}
+                  {...(i === 0 ? { fetchPriority: 'high' as const } : { loading: 'lazy' as const, decoding: 'async' as const })}
+                  // Always animating (not gated on i === currentSlide) so the
+                  // zoom never gets removed-then-reapplied on a slide switch —
+                  // that reset was visible as a jarring snap-back-to-normal-
+                  // size mid-fade. Running continuously means whichever phase
+                  // of the cycle a slide is in when it fades in is just where
+                  // it is; nothing ever resets.
+                  className="h-full w-full object-cover animate-[ken-burns_20s_ease-in-out_infinite_alternate]"
+                />
+              </picture>
             </div>
           ))}
           <div className="absolute inset-0 bg-gradient-to-t from-graphite via-graphite/40 to-transparent" />
-        </div>
+        </motion.div>
 
         {/* Content */}
-        <div className="relative z-10 flex w-full max-w-7xl flex-col items-center text-center px-6 reveal reveal-slow reveal-visible">
+        <motion.div style={{ y: heroContentY }} className="relative z-10 flex w-full max-w-7xl flex-col items-center text-center px-6 reveal reveal-slow reveal-visible">
           <h1 className="font-display text-5xl font-extrabold tracking-tight text-white sm:text-7xl lg:text-[7rem]">
             LANKA<span className="text-safety">AUTO</span>
           </h1>
@@ -141,7 +184,7 @@ export function LandingPage() {
               Visit Our Store
             </Link>
           </div>
-        </div>
+        </motion.div>
 
         {/* Scroll indicator */}
         <div className="absolute bottom-10 z-10 flex flex-col items-center gap-2 text-chalk/30">
@@ -158,7 +201,7 @@ export function LandingPage() {
               the same photo sits behind it as an ambient glow (the
               Apple/Spotify product-shot trick), so its colors bleed softly
               into the page while the photo itself stays crisp and sharp. */}
-          <div className="relative order-2 flex items-center justify-center px-6 py-14 lg:order-1 lg:h-full lg:px-12 lg:py-16">
+          <motion.div style={{ y: browseImageY }} className="relative order-2 flex items-center justify-center px-6 py-14 lg:order-1 lg:h-full lg:px-12 lg:py-16">
             <div className="relative aspect-square w-full max-w-[460px]">
               {PART_CATEGORIES.map((part, i) => (
                 <div
@@ -166,43 +209,56 @@ export function LandingPage() {
                   className={`absolute inset-0 transition-opacity duration-[1500ms] ease-in-out ${i === currentPartSlide ? 'opacity-100' : 'opacity-0'
                     }`}
                 >
-                  <img
-                    src={part.logo}
-                    alt=""
-                    aria-hidden="true"
-                    style={{
-                      filter: 'blur(60px) saturate(1.3) brightness(0.85)',
-                      maskImage: GLOW_FADE_MASK,
-                      WebkitMaskImage: GLOW_FADE_MASK,
-                    }}
-                    className="absolute inset-0 h-full w-full scale-125 object-cover opacity-60"
-                  />
-                  <div className="relative h-full w-full overflow-hidden rounded-3xl shadow-2xl ring-1 ring-white/10">
+                  <picture className="contents" aria-hidden="true">
+                    <source srcSet={webpSrc(part.logo)} type="image/webp" />
                     <img
                       src={part.logo}
                       alt=""
-                      // object-cover is safe here precisely because every
-                      // source is pre-padded to a square (see
-                      // PART_CATEGORIES): the container is square too, so
-                      // cover fills edge-to-edge without actually cropping
-                      // anything off the part.
-                      //
-                      // Lightly desaturated so the one non-studio photo in
-                      // the set (brakes, a real garage shot) sits in the
-                      // same tonal family as the studio ones.
-                      style={{ filter: 'saturate(0.8) contrast(1.05)' }}
-                      // Always animating, not gated on i === currentPartSlide
-                      // — see the hero slider's identical fix above for why.
-                      className="h-full w-full object-cover animate-[ken-burns_12s_ease-in-out_infinite_alternate]"
+                      width={1200}
+                      height={1200}
+                      loading="lazy"
+                      decoding="async"
+                      style={{
+                        filter: 'blur(60px) saturate(1.3) brightness(0.85)',
+                        maskImage: GLOW_FADE_MASK,
+                        WebkitMaskImage: GLOW_FADE_MASK,
+                      }}
+                      className="absolute inset-0 h-full w-full scale-125 object-cover opacity-60"
                     />
+                  </picture>
+                  <div className="relative h-full w-full overflow-hidden rounded-3xl shadow-elevated ring-1 ring-white/10">
+                    <picture className="contents">
+                      <source srcSet={webpSrc(part.logo)} type="image/webp" />
+                      <img
+                        src={part.logo}
+                        alt=""
+                        width={1200}
+                        height={1200}
+                        loading="lazy"
+                        decoding="async"
+                        // object-cover is safe here precisely because every
+                        // source is pre-padded to a square (see
+                        // PART_CATEGORIES): the container is square too, so
+                        // cover fills edge-to-edge without actually cropping
+                        // anything off the part.
+                        //
+                        // Lightly desaturated so the one non-studio photo in
+                        // the set (brakes, a real garage shot) sits in the
+                        // same tonal family as the studio ones.
+                        style={{ filter: 'saturate(0.8) contrast(1.05)' }}
+                        // Always animating, not gated on i === currentPartSlide
+                        // — see the hero slider's identical fix above for why.
+                        className="h-full w-full object-cover animate-[ken-burns_12s_ease-in-out_infinite_alternate]"
+                      />
+                    </picture>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
 
           {/* Right Side: Text & Button */}
-          <div className="order-1 flex flex-col justify-center px-8 py-10 sm:px-16 lg:order-2 lg:h-full lg:py-0">
+          <motion.div style={{ y: browseTextY }} className="order-1 flex flex-col justify-center px-8 py-10 sm:px-16 lg:order-2 lg:h-full lg:py-0">
             <h2 className="font-display text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl leading-tight">
               Explore the Full <br /><span className="text-safety">Catalogue</span>
             </h2>
@@ -215,37 +271,50 @@ export function LandingPage() {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-4 ml-1"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
               </Link>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
       {/* ═══════ 3 — STORE TEASER ═══════ */}
       <section ref={visitRef} className={`flex h-screen min-h-[600px] flex-col justify-center overflow-hidden bg-graphite text-chalk ${visitRevealClass}`}>
         <div className="grid lg:h-full lg:grid-cols-2">
-          <div className="relative flex items-center justify-center px-6 py-14 lg:h-full lg:px-12 lg:py-16">
+          <motion.div style={{ y: visitImageY }} className="relative flex items-center justify-center px-6 py-14 lg:h-full lg:px-12 lg:py-16">
             <div className="relative aspect-square w-full max-w-[460px]">
-              <img
-                src="/images/store-front.jpg"
-                alt=""
-                aria-hidden="true"
-                style={{
-                  filter: 'blur(60px) saturate(1.3) brightness(0.85)',
-                  maskImage: GLOW_FADE_MASK,
-                  WebkitMaskImage: GLOW_FADE_MASK,
-                }}
-                className="absolute inset-0 h-full w-full scale-125 object-cover opacity-60"
-              />
-              <div className="relative h-full w-full overflow-hidden rounded-3xl shadow-2xl ring-1 ring-white/10">
+              <picture className="contents" aria-hidden="true">
+                <source srcSet={webpSrc('/images/store-front.jpg')} type="image/webp" />
                 <img
                   src="/images/store-front.jpg"
-                  alt="LankaAuto Storefront"
-                  style={{ filter: 'saturate(0.55) contrast(1.05) brightness(0.95)' }}
-                  className="h-full w-full object-cover"
+                  alt=""
+                  width={1376}
+                  height={768}
+                  loading="lazy"
+                  decoding="async"
+                  style={{
+                    filter: 'blur(60px) saturate(1.3) brightness(0.85)',
+                    maskImage: GLOW_FADE_MASK,
+                    WebkitMaskImage: GLOW_FADE_MASK,
+                  }}
+                  className="absolute inset-0 h-full w-full scale-125 object-cover opacity-60"
                 />
+              </picture>
+              <div className="relative h-full w-full overflow-hidden rounded-3xl shadow-elevated ring-1 ring-white/10">
+                <picture className="contents">
+                  <source srcSet={webpSrc('/images/store-front.jpg')} type="image/webp" />
+                  <img
+                    src="/images/store-front.jpg"
+                    alt="LankaAuto Storefront"
+                    width={1376}
+                    height={768}
+                    loading="lazy"
+                    decoding="async"
+                    style={{ filter: 'saturate(0.55) contrast(1.05) brightness(0.95)' }}
+                    className="h-full w-full object-cover"
+                  />
+                </picture>
               </div>
             </div>
-          </div>
-          <div className="flex flex-col justify-center px-8 py-8 sm:px-16 lg:py-0">
+          </motion.div>
+          <motion.div style={{ y: visitTextY }} className="flex flex-col justify-center px-8 py-8 sm:px-16 lg:py-0">
             <p className="font-sans text-sm font-semibold uppercase tracking-[0.3em] text-safety/80">
               Our Flagship Store
             </p>
@@ -266,7 +335,7 @@ export function LandingPage() {
                 View Map & Hours
               </Link>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -293,7 +362,7 @@ export function LandingPage() {
           </h2>
 
           <div className="mt-16 grid gap-6 sm:grid-cols-3">
-            <div className="group rounded-2xl border border-muted/10 bg-chalk/5 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:border-safety/30">
+            <div className="group rounded-2xl border border-muted/10 bg-chalk/5 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:shadow-elevated-hover hover:border-safety/30">
               <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-safety/10 text-safety transition-colors group-hover:bg-safety group-hover:text-white">
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -308,7 +377,7 @@ export function LandingPage() {
               </a>
             </div>
 
-            <div className="group rounded-2xl border border-muted/10 bg-chalk/5 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:border-safety/30">
+            <div className="group rounded-2xl border border-muted/10 bg-chalk/5 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:shadow-elevated-hover hover:border-safety/30">
               <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-safety/10 text-safety transition-colors group-hover:bg-safety group-hover:text-white">
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -318,7 +387,7 @@ export function LandingPage() {
               <p className="mt-3 font-display text-xl font-bold text-white">{SHOP.fax}</p>
             </div>
 
-            <div className="group rounded-2xl border border-muted/10 bg-chalk/5 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:border-safety/30">
+            <div className="group rounded-2xl border border-muted/10 bg-chalk/5 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:shadow-elevated-hover hover:border-safety/30">
               <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-safety/10 text-safety transition-colors group-hover:bg-safety group-hover:text-white">
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />

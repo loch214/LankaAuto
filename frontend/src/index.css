@@ -15,14 +15,27 @@
   --font-display: "Outfit", system-ui, sans-serif;
   --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* One shared lighting direction (soft ambient layer + a tighter key-light
+     layer, both cast down-and-slightly-forward) used on every raised
+     surface — photo cards, marquee tiles, contact cards — so depth reads as
+     one consistent light source instead of assembled ad-hoc shadows. */
+  --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.3), 0 20px 40px -12px rgba(0, 0, 0, 0.55);
+  --shadow-elevated-hover: 0 4px 12px rgba(0, 0, 0, 0.35), 0 28px 56px -14px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 90, 31, 0.4);
 }
 
 html,
 body {
   margin: 0;
   font-family: var(--font-sans);
-  scroll-behavior: smooth;
 }
+
+/* Smooth momentum scrolling is handled by Lenis (see useSmoothScroll.ts),
+   mounted in Layout.tsx. Native `scroll-behavior: smooth` is deliberately
+   NOT set here — the two fight each other (Lenis intercepts wheel/touch
+   input and drives its own easing loop), which is the same class of
+   conflict that made the earlier scroll-snap attempt jitter (see the note
+   at the bottom of this file). */
 
 /* The landing page uses full-bleed decorative elements (hero watermark,
    hazard-stripe corner accent) that are meant to bleed past their
@@ -88,34 +101,11 @@ html {
   }
 }
 
-/* Hazard-tape corner accent — the hero's one loud gesture, used exactly once. */
-.hazard-stripe {
-  background-image: repeating-linear-gradient(
-    45deg,
-    var(--color-signal) 0px,
-    var(--color-signal) 10px,
-    var(--color-graphite) 10px,
-    var(--color-graphite) 20px
-  );
-}
-
 /* Pegboard texture for the footer — reads as the back wall of the shop. */
 .pegboard {
   background-image: radial-gradient(var(--color-chalk) 1px, transparent 1px);
   background-size: 18px 18px;
   background-position: -9px -9px;
-}
-
-/* Giant faded wordmark behind the hero — ghost typography, not a real
-   heading (aria-hidden where used). */
-.hero-watermark {
-  font-family: var(--font-display);
-  font-weight: 800;
-  color: var(--color-graphite);
-  opacity: 0.045;
-  line-height: 0.8;
-  letter-spacing: -0.02em;
-  user-select: none;
 }
 
 /* Scroll-reveal: sections fade + rise into place the first time they
@@ -149,15 +139,6 @@ html {
   }
 }
 
-/* Premium UI Enhancements */
-.glass-panel {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
-}
-
 .reveal-slow {
   opacity: 0;
   transform: translateY(40px);
@@ -168,23 +149,9 @@ html {
   transform: translateY(0);
 }
 
-.image-float {
-  animation: float 6s ease-in-out infinite;
-}
-
-@keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-15px); }
-  100% { transform: translateY(0px); }
-}
-
 @keyframes ken-burns {
   0% { transform: scale(1); }
   100% { transform: scale(1.1); }
-}
-
-.bg-ken-burns {
-  animation: ken-burns 30s ease-in-out infinite alternate;
 }
 
 /* Native CSS scroll-snap (mandatory, then proximity) was tried for the
