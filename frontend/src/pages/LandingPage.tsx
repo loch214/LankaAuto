@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { BrandMarquee } from '../components/BrandMarquee';
 import { useReveal } from '../hooks/useReveal';
@@ -101,9 +100,8 @@ export function LandingPage() {
           {SLIDER_IMAGES.map((src, i) => (
             <div
               key={src}
-              className={`absolute inset-0 transition-opacity duration-[2000ms] ease-in-out ${
-                i === currentSlide ? 'opacity-50' : 'opacity-0'
-              }`}
+              className={`absolute inset-0 transition-opacity duration-[2000ms] ease-in-out ${i === currentSlide ? 'opacity-50' : 'opacity-0'
+                }`}
             >
               <img
                 src={src}
@@ -120,40 +118,16 @@ export function LandingPage() {
           ))}
           <div className="absolute inset-0 bg-gradient-to-t from-graphite via-graphite/40 to-transparent" />
         </div>
-        
+
         {/* Content */}
-        <motion.div 
-          className="relative z-10 flex w-full max-w-7xl flex-col items-center text-center px-6"
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <motion.h1 
-            className="font-display text-5xl font-extrabold tracking-tight text-white sm:text-7xl lg:text-[7rem]"
-            style={{ 
-              textShadow: '0 20px 40px rgba(0,0,0,0.5)',
-              transformStyle: 'preserve-3d',
-              perspective: '1000px'
-            }}
-            whileHover={{ scale: 1.05, rotateX: 10, rotateY: 5 }}
-            transition={{ type: "spring", stiffness: 300, damping: 20 }}
-          >
+        <div className="relative z-10 flex w-full max-w-7xl flex-col items-center text-center px-6 reveal reveal-slow reveal-visible">
+          <h1 className="font-display text-5xl font-extrabold tracking-tight text-white sm:text-7xl lg:text-[7rem]">
             LANKA<span className="text-safety">AUTO</span>
-          </motion.h1>
-          <motion.p 
-            className="mt-8 font-sans text-lg font-bold uppercase tracking-[0.4em] text-white/90 sm:text-xl shadow-black drop-shadow-md"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4, duration: 1 }}
-          >
+          </h1>
+          <p className="mt-8 font-sans text-lg font-bold uppercase tracking-[0.4em] text-white/90 sm:text-xl shadow-black drop-shadow-md">
             Japanese Motor Vehicle Spares · Since {SHOP.founded}
-          </motion.p>
-          <motion.div 
-            className="mt-12 flex flex-col gap-4 sm:flex-row"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6, duration: 1 }}
-          >
+          </p>
+          <div className="mt-12 flex flex-col gap-4 sm:flex-row">
             <Link
               to="/browse"
               className="btn-premium"
@@ -166,8 +140,8 @@ export function LandingPage() {
             >
               Visit Our Store
             </Link>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
 
         {/* Scroll indicator */}
         <div className="absolute bottom-10 z-10 flex flex-col items-center gap-2 text-chalk/30">
@@ -189,9 +163,8 @@ export function LandingPage() {
               {PART_CATEGORIES.map((part, i) => (
                 <div
                   key={part.id}
-                  className={`absolute inset-0 transition-opacity duration-[1500ms] ease-in-out ${
-                    i === currentPartSlide ? 'opacity-100' : 'opacity-0'
-                  }`}
+                  className={`absolute inset-0 transition-opacity duration-[1500ms] ease-in-out ${i === currentPartSlide ? 'opacity-100' : 'opacity-0'
+                    }`}
                 >
                   <img
                     src={part.logo}
@@ -231,7 +204,7 @@ export function LandingPage() {
           {/* Right Side: Text & Button */}
           <div className="order-1 flex flex-col justify-center px-8 py-10 sm:px-16 lg:order-2 lg:h-full lg:py-0">
             <h2 className="font-display text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl leading-tight">
-              Explore the Full <br/><span className="text-safety">Catalogue</span>
+              Explore the Full <br /><span className="text-safety">Catalogue</span>
             </h2>
             <p className="mt-6 max-w-md text-base sm:text-lg text-chalk/70 leading-relaxed">
               Engine parts, gearbox parts, brake parts, shock absorbers, electrical parts, lights & mirrors, body parts — all from trusted Japanese brands. We have precisely what you need.
@@ -334,7 +307,7 @@ export function LandingPage() {
                 {SHOP.phoneSecondary}
               </a>
             </div>
-            
+
             <div className="group rounded-2xl border border-muted/10 bg-chalk/5 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:border-safety/30">
               <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-safety/10 text-safety transition-colors group-hover:bg-safety group-hover:text-white">
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -344,7 +317,7 @@ export function LandingPage() {
               <p className="font-sans text-xs font-semibold uppercase tracking-widest text-muted">Fax</p>
               <p className="mt-3 font-display text-xl font-bold text-white">{SHOP.fax}</p>
             </div>
-            
+
             <div className="group rounded-2xl border border-muted/10 bg-chalk/5 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:border-safety/30">
               <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-safety/10 text-safety transition-colors group-hover:bg-safety group-hover:text-white">
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
