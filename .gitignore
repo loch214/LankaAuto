@@ -91,3 +91,12 @@ $RECYCLE.BIN/
 *.user
 *.suo
 .vercel
+
+# ---------------------------------------------------------------------------
+# Higgsfield AI CLI skills
+# ---------------------------------------------------------------------------
+# Personal tooling installed via `npx skills add higgsfield-ai/skills`, not
+# project code -- keep it local, don't commit it.
+.agents/
+.claude/skills/
+skills-lock.json
