@@ -195,8 +195,18 @@ async function callGroq(
   messages: readonly OpenAIMessage[],
   tools: readonly FunctionDeclaration[],
   apiKey: string,
+  /** Absolute `Date.now()`-style deadline for the *whole customer turn*, not just this call — see `generateTurn`. */
+  deadline: number | undefined,
   attempt = 1,
 ): Promise<GroqChatCompletionResponse> {
+  // A prior round in this same turn already burned the whole budget (e.g.
+  // round 1's retries ate it) — don't even try, fail straight to the 503
+  // path below rather than start a request we already know we can't afford
+  // to wait out.
+  if (deadline !== undefined && Date.now() >= deadline) {
+    throw new ChatRateLimitError('Groq request budget exceeded for this turn — try again shortly.');
+  }
+
   const body = {
     model,
     messages,
@@ -222,8 +232,19 @@ async function callGroq(
     const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
       ? Math.min(retryAfter * 1000 + 250, MAX_RETRY_WAIT_MS)
       : backoff;
+
+    // Real incident (2026-08-28, production): a burst of requests near the
+    // 8000 TPM ceiling stacked up multiple retries across the agent's 2
+    // sequential calls-per-turn and produced a raw 502 from the platform
+    // instead of our own error response — worse for the customer than a
+    // fast, honest "try again." Never wait past the turn's own deadline;
+    // fail into the same 503 path a real rate-limit error takes instead.
+    if (deadline !== undefined && Date.now() + waitMs >= deadline) {
+      throw new ChatRateLimitError('Groq request budget exceeded for this turn — try again shortly.');
+    }
+
     await sleep(waitMs);
-    return callGroq(model, messages, tools, apiKey, attempt + 1);
+    return callGroq(model, messages, tools, apiKey, deadline, attempt + 1);
   }
 
   if (!res.ok) {
@@ -240,6 +261,20 @@ export interface GenerateTurnResult {
   readonly parts: readonly ContentPart[];
 }
 
+export interface GenerateTurnOptions {
+  readonly apiKey?: string;
+  readonly model?: string;
+  /**
+   * Absolute `Date.now()`-style deadline shared across every `generateTurn`
+   * call in one customer turn (`agent-loop.ts` computes it once and threads
+   * it through every round) — bounds the *whole* multi-round conversation,
+   * not one HTTP call. Without this, a rate-limited turn could retry its way
+   * past whatever timeout sits in front of this service and come back as a
+   * raw platform error instead of our own "please try again" message.
+   */
+  readonly deadline?: number;
+}
+
 /**
  * One request/response round trip. Does not loop — `agent-loop.ts` decides
  * whether a function-call response needs another round trip; this function
@@ -249,15 +284,18 @@ export async function generateTurn(
   contents: readonly ChatMessage[],
   tools: readonly FunctionDeclaration[],
   systemInstruction: string,
-  apiKey: string | undefined = process.env['GROQ_API_KEY'],
-  model: string = process.env['GROQ_CHAT_MODEL'] ?? DEFAULT_CHAT_MODEL,
+  {
+    apiKey = process.env['GROQ_API_KEY'],
+    model = process.env['GROQ_CHAT_MODEL'] ?? DEFAULT_CHAT_MODEL,
+    deadline,
+  }: GenerateTurnOptions = {},
 ): Promise<GenerateTurnResult> {
   if (apiKey === undefined || apiKey.length === 0) {
     throw new ChatConfigError('GROQ_API_KEY is not set');
   }
 
   const messages = toOpenAIMessages(contents, systemInstruction);
-  const data = await callGroq(model, messages, tools, apiKey);
+  const data = await callGroq(model, messages, tools, apiKey, deadline);
 
   const choice = data.choices?.[0];
   const message = choice?.message;

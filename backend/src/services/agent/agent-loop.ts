@@ -16,6 +16,15 @@ import { generateTurn, type ChatMessage, type ContentPart, type FunctionDeclarat
 import { executeTool, type PartCitation } from './tools.js';
 
 const MAX_TOOL_ROUNDS = 5;
+/**
+ * Wall-clock budget for one whole customer turn (every round combined), not
+ * one HTTP call — see `GenerateTurnOptions.deadline` in `groq-client.ts`.
+ * Real incident (2026-08-28): a rate-limited burst let retries stack up
+ * across rounds and the platform killed the connection with a raw 502
+ * before our own code ever got to answer "please try again." This is the
+ * ceiling that makes sure the agent gives up on its own terms first.
+ */
+const TURN_DEADLINE_MS = 20_000;
 
 function isFunctionCallPart(p: ContentPart): p is { functionCall: { name: string; args: Record<string, unknown> } } {
   return 'functionCall' in p;
@@ -38,9 +47,10 @@ export async function runAgentTurn(
 ): Promise<AgentTurnResult> {
   const contents: ChatMessage[] = [...history];
   const citations = new Map<string, PartCitation>();
+  const deadline = Date.now() + TURN_DEADLINE_MS;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const { parts } = await generateTurn(contents, tools, systemPrompt);
+    const { parts } = await generateTurn(contents, tools, systemPrompt, { deadline });
     const functionCalls = parts.filter(isFunctionCallPart);
 
     if (functionCalls.length === 0) {
