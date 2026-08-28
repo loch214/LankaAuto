@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { runCustomerAgentTurn } from '../services/agent/customer-agent.js';
-import { ChatRateLimitError, type ChatMessage } from '../services/agent/gemini-client.js';
+import { ChatRateLimitError, type ChatMessage } from '../services/agent/groq-client.js';
 
 export const chatRouter = Router();
 
@@ -37,7 +37,7 @@ chatRouter.post('/', async (req, res, next) => {
     const result = await runCustomerAgentTurn(history);
     res.json(result);
   } catch (err) {
-    // A Gemini quota limit is not our bug — surfaced as 503 so the
+    // A Groq rate limit is not our bug — surfaced as 503 so the
     // frontend can show "busy, try again shortly" instead of a generic
     // error, and so it's visibly distinct from an actual server fault in
     // the logs.

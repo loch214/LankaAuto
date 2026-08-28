@@ -1,10 +1,10 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import supertest from 'supertest';
 import { disconnect } from '../lib/prisma.js';
-import { ChatRateLimitError } from '../services/agent/gemini-client.js';
+import { ChatRateLimitError } from '../services/agent/groq-client.js';
 
 // Validation and error-mapping only — a real success path would call
-// `runCustomerAgentTurn`, which hits the real Gemini API. Same rule as the
+// `runCustomerAgentTurn`, which hits the real Groq API. Same rule as the
 // search route's semantic tier (`parts.test.ts`): this suite never makes a
 // live network call. The agent loop itself is covered, mocked, by
 // `agent-loop.test.ts`; a live end-to-end chat exchange is verified

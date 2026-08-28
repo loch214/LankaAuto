@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { runAgentTurn } from './agent-loop.js';
-import { generateTurn } from './gemini-client.js';
+import { generateTurn } from './groq-client.js';
 import { executeTool } from './tools.js';
 
 // The loop's own logic (when to stop, how citations accumulate, what
 // happens on a tool error or an unbounded call streak) is what's under
-// test here — not Gemini itself (no real network call, same rule as
+// test here — not Groq itself (no real network call, same rule as
 // `embeddings.test.ts`) and not the tools' retrieval logic (already
 // covered by `tools.test.ts` against the real DB). Both dependencies are
 // mocked so this file tests orchestration in isolation.
-vi.mock('./gemini-client.js', () => ({ generateTurn: vi.fn() }));
+vi.mock('./groq-client.js', () => ({ generateTurn: vi.fn() }));
 vi.mock('./tools.js', () => ({ executeTool: vi.fn() }));
 
 const mockGenerateTurn = vi.mocked(generateTurn);

@@ -7,12 +7,12 @@
  * Gemini's function-calling contract: the model can respond with either
  * text or one or more `functionCall` parts. When it calls a function, the
  * result goes back as a `functionResponse` part on a 'user'-role message
- * (see the comment on `ChatRole` in `gemini-client.ts`) and the model is
+ * (see the comment on `ChatRole` in `groq-client.ts`) and the model is
  * asked again — repeat until it answers with text instead of a call, or a
  * round cap is hit (a model that keeps calling tools forever is a bug, not
  * something to loop on indefinitely).
  */
-import { generateTurn, type ChatMessage, type ContentPart, type FunctionDeclaration } from './gemini-client.js';
+import { generateTurn, type ChatMessage, type ContentPart, type FunctionDeclaration } from './groq-client.js';
 import { executeTool, type PartCitation } from './tools.js';
 
 const MAX_TOOL_ROUNDS = 5;

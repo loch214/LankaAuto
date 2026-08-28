@@ -16,7 +16,7 @@
  * that always returns nothing is worse than no tool.
  */
 import { z } from 'zod';
-import type { FunctionDeclaration } from './gemini-client.js';
+import type { FunctionDeclaration } from './groq-client.js';
 import { prisma } from '../../lib/prisma.js';
 import { hybridPartSearch } from '../hybrid-part-search.js';
 import { checkFitment, findFitmentsForVehicle } from '../fitment.js';
@@ -43,16 +43,22 @@ const findVehicleFitmentsArgs = z.object({
   vehicleId: z.uuid(),
 });
 
+// These declarations ship on every LLM call (twice per customer message), so
+// their length is a direct tax on Groq's 8000 tokens-per-minute free-tier
+// budget — see the same note on `customer-agent.ts`'s system prompt. They
+// were condensed from prose to the minimum that still states each tool's
+// contract and its one safety rule; the fuller reasoning lives in the file
+// header and in the services each one wraps, not in tokens paid per request.
 export const CUSTOMER_TOOLS: readonly FunctionDeclaration[] = [
   {
     name: 'search_parts',
     description:
-      "Search the catalogue by part number (exact or approximate) or by a plain-language description of what the customer needs. Always try this first when a customer names a part, a code, or a symptom/need (e.g. 'brake pads for a 2015 Vitz', 'GUT 12', 'something for my Hiace's steering'). Returns each hit's brand, category, and how it matched (exact-number / fuzzy-number / semantic) — matchType tells you how confident to be. Does NOT return stock/availability — this tool never knows it, so never state or imply whether a part is in stock; tell the customer to call or visit the shop to check.",
+      'Search the catalogue by part number (exact or approximate) or by plain-language description. Try this first whenever the customer names a part, code, or need. Returns brand, category, and matchType (exact-number/fuzzy-number/semantic). Never returns stock — do not state or imply availability.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        query: { type: 'STRING', description: 'The part number or description to search for.' },
-        limit: { type: 'NUMBER', description: 'Max results to return, default 5, max 10.' },
+        query: { type: 'STRING', description: 'Part number or description.' },
+        limit: { type: 'NUMBER', description: 'Max results, default 5, max 10.' },
       },
       required: ['query'],
     },
@@ -60,24 +66,24 @@ export const CUSTOMER_TOOLS: readonly FunctionDeclaration[] = [
   {
     name: 'lookup_vehicle',
     description:
-      "Resolve a vehicle the customer mentioned by name (e.g. 'Toyota Hiace', 'Corolla') to catalogue vehicle records with real ids. Call this before check_fitment or find_vehicle_fitments — those need a vehicleId, not a name. Provide make and/or model; partial, case-insensitive matches are fine. May return multiple rows if the name is ambiguous (e.g. several chassis codes) — if so, ask the customer which one, don't guess.",
+      "Resolve a vehicle name (e.g. 'Toyota Hiace') to records with real ids. Required before check_fitment or find_vehicle_fitments. Partial, case-insensitive matches are fine. If it returns multiple rows, ask the customer which one — don't guess.",
     parameters: {
       type: 'OBJECT',
       properties: {
-        make: { type: 'STRING', description: "Vehicle make, e.g. 'Toyota'." },
-        model: { type: 'STRING', description: "Vehicle model, e.g. 'Hiace'." },
+        make: { type: 'STRING', description: "e.g. 'Toyota'." },
+        model: { type: 'STRING', description: "e.g. 'Hiace'." },
       },
     },
   },
   {
     name: 'check_fitment',
     description:
-      "Check whether a specific part fits a specific vehicle. Requires real partId and vehicleId (from search_parts and lookup_vehicle — never guess or invent ids). Returns one of three verdicts: CONFIRMED (an asserted fitment record exists — you may say yes), POSSIBLE (no record, but attributes overlap — you must tell the customer this is unconfirmed and suggest calling the shop), or NO_MATCH (no evidence it fits).",
+      'Check whether a part fits a vehicle. Needs real ids from search_parts and lookup_vehicle — never invent ids. Verdicts: CONFIRMED (on record), POSSIBLE (attributes overlap only — unconfirmed, tell them to call the shop), NO_MATCH.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        partId: { type: 'STRING', description: 'Real part id from a prior search_parts result.' },
-        vehicleId: { type: 'STRING', description: 'Real vehicle id from a prior lookup_vehicle result.' },
+        partId: { type: 'STRING', description: 'Real id from search_parts.' },
+        vehicleId: { type: 'STRING', description: 'Real id from lookup_vehicle.' },
       },
       required: ['partId', 'vehicleId'],
     },
@@ -85,11 +91,11 @@ export const CUSTOMER_TOOLS: readonly FunctionDeclaration[] = [
   {
     name: 'find_vehicle_fitments',
     description:
-      "List every part on record as fitting a given vehicle (requires a real vehicleId from lookup_vehicle). If the result's ambiguous flag is true, more than one distinct part is asserted for this vehicle and nothing in the catalogue data distinguishes which one is correct — you MUST list every candidate to the customer and say the shop needs to confirm which one (e.g. by the size of the old part), never pick one yourself.",
+      'List every part on record as fitting a vehicle (needs a real vehicleId). If ambiguous is true, list every candidate and say the shop must confirm which is correct — never pick one.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        vehicleId: { type: 'STRING', description: 'Real vehicle id from a prior lookup_vehicle result.' },
+        vehicleId: { type: 'STRING', description: 'Real id from lookup_vehicle.' },
       },
       required: ['vehicleId'],
     },
