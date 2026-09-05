@@ -24,6 +24,7 @@
     "ingest:gmb-ujoint": "tsx src/scripts/ingest-gmb-ujoint.ts",
     "seed:admin": "tsx src/scripts/seed-admin.ts",
     "seed:categories": "tsx src/scripts/seed-categories.ts",
+    "seed:sample": "tsx src/scripts/seed-sample-catalogue.ts",
     "embed:parts": "tsx src/scripts/embed-parts.ts",
     "search": "tsx src/scripts/search-cli.ts",
     "eval": "tsx src/scripts/run-eval.ts",

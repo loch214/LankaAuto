@@ -115,6 +115,35 @@ describe('buildEmbeddingText', () => {
     expect(occurrences).toBe(1);
   });
 
+  /**
+   * Regression: both callers load `fitments` with no `orderBy`, so the same
+   * part can arrive here with its vehicles in any order — and Postgres does
+   * change that order when the rows are rewritten. If the text changed with
+   * it, `embed-parts.ts`'s "has the source text changed?" check would
+   * re-embed unchanged parts, and `reembedPart` would fight it forever.
+   */
+  it('produces identical text regardless of the order fitment vehicles arrive in', () => {
+    const vehicles = [
+      { make: 'TOYOTA', model: 'COROLLA', chassisCode: 'AE110' },
+      { make: 'NISSAN', model: 'SUNNY', chassisCode: null },
+      { make: 'MITSUBISHI', model: 'CANTER', chassisCode: 'FE639' },
+    ];
+
+    const forward = buildEmbeddingText({ ...base, fitmentVehicles: vehicles });
+    const reversed = buildEmbeddingText({ ...base, fitmentVehicles: [...vehicles].reverse() });
+    const rotated = buildEmbeddingText({
+      ...base,
+      fitmentVehicles: [vehicles[1]!, vehicles[2]!, vehicles[0]!],
+    });
+
+    expect(reversed).toBe(forward);
+    expect(rotated).toBe(forward);
+    // Still actually naming all three, rather than being stable by dropping them.
+    expect(forward).toContain('TOYOTA COROLLA (AE110)');
+    expect(forward).toContain('NISSAN SUNNY');
+    expect(forward).toContain('MITSUBISHI CANTER (FE639)');
+  });
+
   it('parseEmbeddingAttributes reads a real ingester-shaped JSON blob', () => {
     const parsed = parseEmbeddingAttributes({
       make: 'ISUZU',

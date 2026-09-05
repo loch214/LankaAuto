@@ -42,8 +42,35 @@ describe('executeTool', () => {
     expect(result.citedParts).toEqual([]); // vehicles aren't parts
   });
 
-  it('lookup_vehicle rejects a call with neither make nor model', async () => {
+  it('lookup_vehicle rejects a call with neither make, model, nor chassis code', async () => {
     await expect(executeTool('lookup_vehicle', {})).rejects.toThrow(ToolArgumentError);
+  });
+
+  /**
+   * Regression: reproduced live in the browser before this fix. A customer
+   * answering the agent's own disambiguation question with just a chassis
+   * code ("the CS3, 2003-2007 one") got "I couldn't find a record for a
+   * Mitsubishi Lancer CS3" — even though the vehicle it had just listed
+   * still existed — because `lookup_vehicle` had no way to search on
+   * `chassisCode` at all, only `make`/`model`.
+   *
+   * Builds its own vehicle rather than borrowing a seeded one: the sample
+   * catalogue (the only current source of non-null chassis codes) is
+   * explicitly purgeable, and GMB's own 62 rows never carry one at all.
+   */
+  it('lookup_vehicle finds a vehicle by chassis code alone, with no make or model', async () => {
+    const unique = `TOOLS-TEST-CHASSIS-${Date.now()}`;
+    const vehicle = await prisma.vehicle.create({
+      data: { make: 'TESTMAKE', model: 'TESTMODEL', chassisCode: unique, identityKey: unique },
+    });
+
+    try {
+      const result = await executeTool('lookup_vehicle', { chassisCode: unique });
+      const vehicles = result.response['vehicles'] as { vehicleId: string; chassisCode: string | null }[];
+      expect(vehicles.some((v) => v.vehicleId === vehicle.id && v.chassisCode === unique)).toBe(true);
+    } finally {
+      await prisma.vehicle.delete({ where: { id: vehicle.id } });
+    }
   });
 
   it('check_fitment cites the part it checked and returns a real verdict', async () => {

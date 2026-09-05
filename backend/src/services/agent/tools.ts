@@ -32,6 +32,7 @@ const searchPartsArgs = z.object({
 const lookupVehicleArgs = z.object({
   make: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
+  chassisCode: z.string().min(1).optional(),
 });
 
 const checkFitmentArgs = z.object({
@@ -66,12 +67,13 @@ export const CUSTOMER_TOOLS: readonly FunctionDeclaration[] = [
   {
     name: 'lookup_vehicle',
     description:
-      "Resolve a vehicle name (e.g. 'Toyota Hiace') to records with real ids. Required before check_fitment or find_vehicle_fitments. Partial, case-insensitive matches are fine. If it returns multiple rows, ask the customer which one — don't guess.",
+      "Resolve a vehicle to records with real ids. Required before check_fitment or find_vehicle_fitments. Pass make/model when known (e.g. 'Toyota'/'Hiace'); pass chassisCode alone if that's all the customer gave — e.g. after you already listed candidates and they answer with just a code like 'CS3'. Partial, case-insensitive matches are fine. If it returns multiple rows, ask the customer which one — don't guess.",
     parameters: {
       type: 'OBJECT',
       properties: {
         make: { type: 'STRING', description: "e.g. 'Toyota'." },
         model: { type: 'STRING', description: "e.g. 'Hiace'." },
+        chassisCode: { type: 'STRING', description: "e.g. 'CS3'. Use alone if the customer only gave a chassis code." },
       },
     },
   },
@@ -141,14 +143,24 @@ export async function executeTool(name: string, rawArgs: Record<string, unknown>
     }
 
     case 'lookup_vehicle': {
-      const { make, model } = lookupVehicleArgs.parse(rawArgs);
-      if (make === undefined && model === undefined) {
-        throw new ToolArgumentError('lookup_vehicle needs at least a make or a model');
+      const { make, model, chassisCode } = lookupVehicleArgs.parse(rawArgs);
+      if (make === undefined && model === undefined && chassisCode === undefined) {
+        throw new ToolArgumentError('lookup_vehicle needs at least a make, a model, or a chassis code');
       }
+      // A customer answering a disambiguation question ("the CS3, 2003-2007
+      // one") is naming a vehicle by chassis code alone — the agent's
+      // *own* prior lookup_vehicle response is where that code came from
+      // (`chassisCode` on each candidate), but the model prompt has no
+      // vehicle name to hand back with it. Requiring make/model here would
+      // make the tool structurally unable to resolve its own disambiguation
+      // answers. Reproduced live before this fix: "the CS3, 2003-2007 one"
+      // (no make/model repeated) got "I couldn't find a record" even though
+      // the vehicle it had just listed still existed.
       const vehicles = await prisma.vehicle.findMany({
         where: {
           ...(make !== undefined ? { make: { contains: make, mode: 'insensitive' } } : {}),
           ...(model !== undefined ? { model: { contains: model, mode: 'insensitive' } } : {}),
+          ...(chassisCode !== undefined ? { chassisCode: { contains: chassisCode, mode: 'insensitive' } } : {}),
         },
         take: 10,
       });

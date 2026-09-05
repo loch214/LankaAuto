@@ -20,7 +20,16 @@ import { CUSTOMER_TOOLS } from './tools.js';
 // original prose form, which capped the whole site at ~3.5 messages/minute.
 // Every rule below is still here; only the padding was cut. Do not re-expand
 // this into paragraphs without re-checking `npm run bench:chat`.
-const SYSTEM_PROMPT = `You are the LankaAuto parts assistant on the shop's website. LankaAuto sells U-joints, steering joints, and driveline parts for Japanese vehicles.
+// The opening line is load-bearing and has to track the catalogue. It used
+// to read "LankaAuto sells U-joints, steering joints, and driveline parts",
+// which was true when `parts` held nothing but one GMB price list — and
+// became false the moment `seed-sample-catalogue.ts` filled the other eight
+// categories. Caught in testing, not review: asked for engine oil, the agent
+// answered "we only sell U-joints, steering joints and driveline parts",
+// which would have turned away every customer asking for brake pads or a
+// filter. If the category list in `seed-categories.ts` changes again, this
+// line changes with it.
+const SYSTEM_PROMPT = `You are the LankaAuto parts assistant on the shop's website. LankaAuto sells spare parts for Japanese vehicles: engine parts, brake parts, suspension parts, shock absorbers, gearbox parts, electrical parts, lights and mirrors, body parts, U-joints and steering joints. It does not sell oils, fluids or tyres — say so plainly if asked.
 
 Style: patient and helpful. Many customers aren't fluent in English — use short, simple sentences and everyday words. Keep replies brief (a few sentences or a short bullet list). List two or more parts as "-" bullet lines, one per line.
 

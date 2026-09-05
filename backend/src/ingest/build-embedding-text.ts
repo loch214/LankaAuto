@@ -93,6 +93,34 @@ export function parseEmbeddingAttributes(json: unknown): EmbeddingPartAttributes
 export function buildEmbeddingText(input: EmbeddingTextInput): string {
   const attrs = input.attributes;
 
+  /**
+   * Sorted, because callers cannot promise an order. Both of them load
+   * fitments with `fitments: { include: { vehicle: true } }` and no
+   * `orderBy`, so Postgres returns whatever heap order it currently has —
+   * and it is free to change that whenever those rows are rewritten, which
+   * `seed-sample-catalogue.ts` does to all 138 of them on every run.
+   *
+   * "Same facts, different sentence" then breaks two things silently:
+   *
+   *   - `embed-parts.ts`'s incremental check compares the stored
+   *     `source_text` to decide what to re-embed, so it re-embeds parts
+   *     nothing has actually changed about (measured: 2 parts after one
+   *     seed re-run, for a wasted API call each);
+   *   - worse, the two callers disagree. `reembedPart` (fired by `PATCH
+   *     /parts/:id`) and `embed-parts.ts` would each see the other's text as
+   *     "changed" and rewrite it, indefinitely.
+   *
+   * Sorting here rather than adding an `orderBy` to each caller is
+   * deliberate: "the same facts produce the same text" is a property of the
+   * recipe, and a fix in one caller leaves the other one wrong. Plain string
+   * comparison, not `localeCompare`, so the order cannot shift with the
+   * machine's locale either.
+   */
+  const fitmentVehicles = [...input.fitmentVehicles].sort((a, b) => {
+    const [left, right] = [describeVehicle(a), describeVehicle(b)];
+    return left < right ? -1 : left > right ? 1 : 0;
+  });
+
   // Every make hint the ingester found, from every source: the structured
   // `make` field, the fallback `inlineMake` span (a make name spotted inside
   // the fitment text itself rather than the dedicated column), and the
@@ -101,7 +129,7 @@ export function buildEmbeddingText(input: EmbeddingTextInput): string {
   const makes = uniq([
     ...(attrs.make !== null && attrs.make !== undefined ? [attrs.make] : []),
     ...(attrs.inlineMake ?? []),
-    ...input.fitmentVehicles.map((v) => v.make),
+    ...fitmentVehicles.map((v) => v.make),
   ]);
 
   const sentences: string[] = [];
@@ -114,7 +142,7 @@ export function buildEmbeddingText(input: EmbeddingTextInput): string {
     sentences.push(`Part number ${input.partNumber}.`);
   }
 
-  const fitmentDescriptions = input.fitmentVehicles.map(describeVehicle);
+  const fitmentDescriptions = fitmentVehicles.map(describeVehicle);
   if (fitmentDescriptions.length > 0) {
     sentences.push(`Fits: ${uniq(fitmentDescriptions).join(', ')}.`);
   }
