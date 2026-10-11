@@ -47,7 +47,7 @@ function Row({
       {doubled.map((brand, i) => (
         <div
           key={`${brand.id}-${i}`}
-          className={`group mx-3 flex h-28 w-48 shrink-0 items-center justify-center rounded-xl bg-white ${padding} shadow-elevated transition-all duration-500 ease-out hover:-translate-y-1.5 hover:shadow-elevated-hover`}
+          className={`group mx-2 flex h-20 w-36 shrink-0 sm:mx-3 sm:h-28 sm:w-48 items-center justify-center rounded-xl bg-white ${padding} shadow-elevated transition-all duration-500 ease-out hover:-translate-y-1.5 hover:shadow-elevated-hover`}
         >
           {brand.logo ? (
             <img
@@ -86,7 +86,7 @@ export function BrandMarquee({
     <div
       // py- gives the hover lift room to breathe without being clipped,
       // space-y- keeps the two rows from colliding.
-      className="space-y-6 overflow-hidden py-8"
+      className="space-y-4 overflow-hidden py-6 sm:space-y-6 sm:py-8"
       style={{ maskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)' }}
     >
       {/*

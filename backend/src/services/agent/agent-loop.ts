@@ -34,6 +34,70 @@ function isTextPart(p: ContentPart): p is { text: string } {
   return 'text' in p;
 }
 
+/**
+ * Models sometimes write a part number with a look-alike Unicode dash
+ * (U+2011 non-breaking hyphen, U+2013 en dash, U+2212 minus...) instead of
+ * a plain "-". It looks identical on screen but breaks everything that
+ * compares text: the citation filter below silently dropped the part, and a
+ * customer copying the number into search found nothing. Seen in a real
+ * reply on 2026-10-11, and only some of the time — so it's fixed here,
+ * deterministically, not by asking the model nicely in the prompt.
+ *
+ * Only a dash with a letter/digit directly on both sides is touched — that's
+ * a code or a range ("16510‑81420", "2000–2012"). A spaced dash ("parts –
+ * oil filter") is ordinary punctuation and left as written.
+ */
+const LOOKALIKE_DASH = /(?<=[\p{L}\p{N}])[‐-―−﹘﹣－](?=[\p{L}\p{N}])/gu;
+
+export function normaliseDashes(text: string): string {
+  return text.replace(LOOKALIKE_DASH, '-');
+}
+
+/**
+ * The widget shows text as-is, so markdown arrives as literal symbols
+ * ("**16510-81420**"). The prompt forbids it and the model still did it
+ * (traced 2026-10-11) — so it's removed here instead of requested there.
+ */
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/[ \t]+$/gm, '');
+}
+
+/**
+ * A sentence claiming a part fits ("it fits your Alto", "will fit the
+ * HA36S"). Questions and negations aren't claims — "which one fits",
+ * "whether it fits", "doesn't fit" — so a match preceded by those words in
+ * the same sentence is skipped. Deliberately narrow: a missed claim falls
+ * back to the tool-level guarantee (the model is never handed a single
+ * vehicle to pick), while a false alarm only costs one extra model call.
+ */
+const FIT_CLAIM = /\b(?:fits|will fit|is compatible with)\s+(?:your|the|a|an|all|both|every|this|that|these|those)\b/gi;
+const NOT_A_CLAIM = /\b(?:which|whether|if|not|never|no|can't|cannot|don't|doesn't|isn't|won't|unsure|confirm)\b[^.!?\n]*$/i;
+
+export function claimsFit(reply: string): boolean {
+  for (const m of reply.matchAll(FIT_CLAIM)) {
+    const sentenceStart = Math.max(reply.lastIndexOf('.', m.index), reply.lastIndexOf('\n', m.index), reply.lastIndexOf('?', m.index));
+    if (!NOT_A_CLAIM.test(reply.slice(sentenceStart + 1, m.index))) return true;
+  }
+  return false;
+}
+
+const UNBACKED_FIT_CORRECTION =
+  'Check failed: your reply says a part fits, but no tool result this turn confirmed a fit for one specific vehicle. ' +
+  'Rewrite it. Say only what the tool results say (e.g. "listed for the Alto F8D and HA36S"), then ask which vehicle they have, or say to call the shop. Do not say it fits. Plain text only.';
+
+function safeFallback(cited: readonly PartCitation[]): string {
+  const listed = cited.slice(0, 5).map((c) => `- ${c.partNumber ?? ''} ${c.rawName}`.replace(/^- {2}/, '- '));
+  return [
+    ...(listed.length > 0 ? ['These parts came up:', ...listed, ''] : []),
+    "I can't confirm from here which one fits your vehicle. Tell me the chassis code (it's on the revenue licence) or the year, or call the shop and they'll check for you.",
+  ].join('\n');
+}
+
 export interface AgentTurnResult {
   readonly reply: string;
   /** Every part any tool call this turn actually returned — the frontend's citation list. Never claims a part was involved unless a tool call proves it. */
@@ -44,17 +108,48 @@ export async function runAgentTurn(
   history: readonly ChatMessage[],
   tools: readonly FunctionDeclaration[],
   systemPrompt: string,
+  /** Debug hook (`npm run trace:chat`): told about every tool call and every guard intervention. */
+  onEvent?: (event: string) => void,
 ): Promise<AgentTurnResult> {
   const contents: ChatMessage[] = [...history];
   const citations = new Map<string, PartCitation>();
   const deadline = Date.now() + TURN_DEADLINE_MS;
+  // Set by a tool result that established a fit for ONE specific vehicle
+  // (`ToolExecutionResult.confirmedFit`). Without it, the reply may not
+  // claim a fit — checked below before anything reaches the customer.
+  let fitConfirmed = false;
+  let corrected = false;
+
+  // Keep only citations whose part number the reply actually names — see
+  // the note where this is used.
+  const reliedOn = (reply: string) =>
+    [...citations.values()].filter(
+      (c) => c.partNumber !== null && reply.toUpperCase().includes(c.partNumber.toUpperCase()),
+    );
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const { parts } = await generateTurn(contents, tools, systemPrompt, { deadline });
     const functionCalls = parts.filter(isFunctionCallPart);
 
     if (functionCalls.length === 0) {
-      const reply = parts.filter(isTextPart).map((p) => p.text).join('');
+      const reply = stripMarkdown(normaliseDashes(parts.filter(isTextPart).map((p) => p.text).join('')));
+
+      // carelanka's pattern: check the draft with plain code before anyone
+      // sees it; on failure, one revision with the exact problem spelled
+      // out; if that still fails, a fixed safe answer. Traced before this
+      // existed: "16510-81420 fits your Suzuki Alto (F8D model)" to a
+      // customer who never said which Alto.
+      if (!fitConfirmed && claimsFit(reply)) {
+        onEvent?.(`GUARD: unbacked fit claim${corrected ? ' again -> safe fallback' : ' -> asking for a revision'}: ${reply}`);
+        if (corrected) {
+          return { reply: safeFallback(reliedOn(reply)), citations: reliedOn(reply) };
+        }
+        corrected = true;
+        contents.push({ role: 'model', parts: [{ text: reply }] });
+        contents.push({ role: 'user', parts: [{ text: UNBACKED_FIT_CORRECTION }] });
+        continue;
+      }
+
       // Every tool call this turn is a candidate citation, but not every
       // candidate ends up in the answer — a semantic search over an
       // out-of-catalogue query (e.g. "brake pads for a Honda Civic" against
@@ -64,10 +159,7 @@ export async function runAgentTurn(
       // is actually named in the reply text is a cheap, honest filter: it
       // can only under-cite (a part discussed without ever printing its
       // number), never claim a source the reply doesn't reference.
-      const reliedOn = [...citations.values()].filter(
-        (c) => c.partNumber !== null && reply.toUpperCase().includes(c.partNumber.toUpperCase()),
-      );
-      return { reply, citations: reliedOn };
+      return { reply, citations: reliedOn(reply) };
     }
 
     contents.push({ role: 'model', parts });
@@ -76,7 +168,10 @@ export async function runAgentTurn(
     for (const call of functionCalls) {
       try {
         const result = await executeTool(call.functionCall.name, call.functionCall.args);
+        onEvent?.(`CALL ${call.functionCall.name}(${JSON.stringify(call.functionCall.args)})
+    -> ${JSON.stringify(result.response).slice(0, 600)}`);
         for (const cited of result.citedParts) citations.set(cited.partId, cited);
+        if (result.confirmedFit === true) fitConfirmed = true;
         functionResponseParts.push({
           functionResponse: { name: call.functionCall.name, response: result.response },
         });
@@ -85,6 +180,8 @@ export async function runAgentTurn(
         // stack — a bad/hallucinated id should make the model say "I
         // couldn't find that," not 500 the whole chat request.
         const message = err instanceof Error ? err.message : String(err);
+        onEvent?.(`CALL ${call.functionCall.name}(${JSON.stringify(call.functionCall.args)})
+    -> ERROR ${message}`);
         functionResponseParts.push({
           functionResponse: { name: call.functionCall.name, response: { error: message } },
         });

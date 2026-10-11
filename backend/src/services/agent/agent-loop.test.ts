@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { runAgentTurn } from './agent-loop.js';
+import { runAgentTurn, claimsFit, stripMarkdown } from './agent-loop.js';
 import { generateTurn } from './groq-client.js';
 import { executeTool } from './tools.js';
 
@@ -48,6 +48,32 @@ describe('runAgentTurn', () => {
     expect(result.reply).toBe('GUT12 is in stock.');
     expect(result.citations).toEqual([{ partId: 'p1', partNumber: 'GUT12', rawName: 'TOYOTA HIACE' }]);
     expect(mockGenerateTurn).toHaveBeenCalledTimes(2);
+  });
+
+  it('normalises look-alike Unicode hyphens so a named part number still gets its citation', async () => {
+    // Real reply seen 2026-10-11: the model wrote "16510‑81420" (U+2011,
+    // non-breaking hyphen) — identical on screen to "16510-81420", but the
+    // exact-match citation filter dropped the part, so the customer got no
+    // clickable chip, and copying the number into search found nothing.
+    mockGenerateTurn
+      .mockResolvedValueOnce({
+        parts: [{ functionCall: { name: 'search_parts', args: { query: 'oil filter alto' } } }],
+      })
+      .mockResolvedValueOnce({
+        parts: [{ text: 'The oil filter is part 16510‑81420 (Alto 2000–2012). Engine parts – oil filter.' }],
+      });
+
+    mockExecuteTool.mockResolvedValueOnce({
+      response: { hits: [{ partNumber: '16510-81420' }] },
+      citedParts: [{ partId: 'p1', partNumber: '16510-81420', rawName: 'OIL FILTER SUZUKI ALTO' }],
+    });
+
+    const result = await runAgentTurn([{ role: 'user', parts: [{ text: 'oil filter for alto' }] }], [], 'system prompt');
+
+    // Dashes *inside* a code/range become plain "-"; a spaced prose dash
+    // ("parts – oil filter") is punctuation and is left alone.
+    expect(result.reply).toBe('The oil filter is part 16510-81420 (Alto 2000-2012). Engine parts – oil filter.');
+    expect(result.citations).toEqual([{ partId: 'p1', partNumber: '16510-81420', rawName: 'OIL FILTER SUZUKI ALTO' }]);
   });
 
   it('deduplicates citations across multiple tool calls that reference the same part', async () => {
@@ -126,5 +152,76 @@ describe('runAgentTurn', () => {
     expect(result.reply).toMatch(/try again|call the shop/i);
     // Bounded, not unbounded — proves there's an actual cap, not a fluke pass.
     expect(mockGenerateTurn.mock.calls.length).toBeLessThan(20);
+  });
+
+  describe('unbacked "it fits" claims (the Suzuki Alto F8D bug)', () => {
+    const searchThenClaim = () => {
+      mockExecuteTool.mockResolvedValueOnce({
+        response: { status: 'NEED_VARIANT' },
+        citedParts: [{ partId: 'p1', partNumber: '16510-81420', rawName: 'OIL FILTER SUZUKI ALTO' }],
+      });
+      mockGenerateTurn.mockResolvedValueOnce({
+        parts: [{ functionCall: { name: 'check_part_fits', args: { partId: 'p1', make: 'Suzuki', model: 'Alto' } } }],
+      });
+      mockGenerateTurn.mockResolvedValueOnce({ parts: [{ text: '16510-81420 fits your Suzuki Alto (F8D model).' }] });
+    };
+
+    it('asks the model to revise once, and returns the revised reply', async () => {
+      searchThenClaim();
+      mockGenerateTurn.mockResolvedValueOnce({
+        parts: [{ text: '16510-81420 is listed for the Alto F8D and HA36S. Which one do you have?' }],
+      });
+
+      const result = await runAgentTurn([{ role: 'user', parts: [{ text: 'oil filter for alto' }] }], [], 'sys');
+
+      expect(result.reply).toBe('16510-81420 is listed for the Alto F8D and HA36S. Which one do you have?');
+      expect(mockGenerateTurn).toHaveBeenCalledTimes(3);
+      const correction = mockGenerateTurn.mock.calls[2]![0].at(-1)!;
+      expect(JSON.stringify(correction)).toContain('Check failed');
+    });
+
+    it('falls back to a fixed safe answer if the revision still claims a fit', async () => {
+      searchThenClaim();
+      mockGenerateTurn.mockResolvedValueOnce({ parts: [{ text: 'Yes, 16510-81420 fits your Alto.' }] });
+
+      const result = await runAgentTurn([{ role: 'user', parts: [{ text: 'oil filter for alto' }] }], [], 'sys');
+
+      expect(claimsFit(result.reply)).toBe(false);
+      expect(result.reply).toContain("can't confirm");
+      expect(result.reply).toContain('16510-81420');
+    });
+
+    it('lets a fit claim through when a tool confirmed a fit for one vehicle', async () => {
+      mockExecuteTool.mockResolvedValueOnce({
+        response: { status: 'CONFIRMED' },
+        citedParts: [{ partId: 'p1', partNumber: '16510-81420', rawName: 'OIL FILTER SUZUKI ALTO' }],
+        confirmedFit: true,
+      });
+      mockGenerateTurn
+        .mockResolvedValueOnce({ parts: [{ functionCall: { name: 'check_part_fits', args: { partId: 'p1', chassisCode: 'HA36S' } } }] })
+        .mockResolvedValueOnce({ parts: [{ text: '16510-81420 fits the Alto HA36S.' }] });
+
+      const result = await runAgentTurn([{ role: 'user', parts: [{ text: 'alto HA36S' }] }], [], 'sys');
+
+      expect(result.reply).toBe('16510-81420 fits the Alto HA36S.');
+      expect(mockGenerateTurn).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it.each([
+    ['16510-81420 fits your Suzuki Alto.', true],
+    ['It will fit the HA36S.', true],
+    ['Tell me which one you have and I can check which part fits your car.', false],
+    ["It doesn't fit the Hiace.", false],
+    ['I need to confirm whether it fits your Alto.', false],
+    ['It is listed for the Alto F8D and HA36S.', false],
+  ])('claimsFit(%j) → %s', (text, expected) => {
+    expect(claimsFit(text)).toBe(expected);
+  });
+
+  it('strips markdown the widget would otherwise show literally', () => {
+    expect(stripMarkdown('The part **16510-81420** fits.\n## Note\nUse `GUT12`.')).toBe(
+      'The part 16510-81420 fits.\nNote\nUse GUT12.',
+    );
   });
 });

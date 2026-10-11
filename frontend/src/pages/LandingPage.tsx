@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion';
 import { BrandMarquee } from '../components/BrandMarquee';
 import { useReveal } from '../hooks/useReveal';
@@ -77,7 +77,27 @@ const SLIDER_IMAGES = [
   '/images/slider/slide6.jpg',
 ];
 
+/**
+ * True at Tailwind's `lg` breakpoint and up. The scroll-linked parallax is
+ * desktop-only: on a phone the sections stack (text over image) instead of
+ * sitting side by side, and nudging two stacked blocks in opposite
+ * directions makes them drift into each other instead of reading as depth.
+ */
+function useIsDesktop() {
+  const query = '(min-width: 1024px)';
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const onChange = () => setIsDesktop(mql.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+  return isDesktop;
+}
+
 export function LandingPage() {
+  const navigate = useNavigate();
+  const [heroQuery, setHeroQuery] = useState('');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [currentPartSlide, setCurrentPartSlide] = useState(0);
 
@@ -105,7 +125,8 @@ export function LandingPage() {
   // feel" — no rotation/tilt/scale, which is what the user explicitly
   // called out as the cheap-looking failure mode.
   const reduceMotion = useReducedMotion();
-  const parallaxRange = reduceMotion === true ? 0 : 1;
+  const isDesktop = useIsDesktop();
+  const parallaxRange = reduceMotion === true || !isDesktop ? 0 : 1;
 
   const heroRef = useRef<HTMLElement>(null);
   const { scrollYProgress: heroProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
@@ -126,7 +147,11 @@ export function LandingPage() {
   return (
     <div className="bg-graphite">
       {/* ═══════ 1 — HERO ═══════ */}
-      <section ref={heroRef} className="relative flex h-screen min-h-[600px] flex-col items-center justify-center overflow-hidden bg-graphite">
+      {/* 100svh, not 100vh: on phones `vh` is measured with the browser's
+          address bar hidden, so a `h-screen` hero is taller than what's
+          actually visible and the buttons sit under the fold. `svh` is the
+          height with the bar showing. */}
+      <section ref={heroRef} className="relative flex h-[100svh] min-h-[560px] flex-col items-center justify-center overflow-hidden bg-graphite">
         {/* Animated background slider. Translated slightly slower than the
             foreground content below as the section scrolls past — the
             background lagging the foreground is what reads as depth. The
@@ -164,45 +189,87 @@ export function LandingPage() {
 
         {/* Content */}
         <motion.div style={{ y: heroContentY }} className="relative z-10 flex w-full max-w-7xl flex-col items-center text-center px-6 reveal reveal-slow reveal-visible">
-          <h1 className="font-display text-5xl font-extrabold tracking-tight text-white sm:text-7xl lg:text-[7rem]">
+          <h1 className="font-display text-[3.25rem] leading-none font-extrabold tracking-[-0.03em] text-white sm:text-7xl lg:text-[7rem]">
             LANKA<span className="text-safety">AUTO</span>
           </h1>
-          <p className="mt-8 font-sans text-lg font-bold uppercase tracking-[0.4em] text-white/90 sm:text-xl shadow-black drop-shadow-md">
-            Japanese Motor Vehicle Spares · Since {SHOP.founded}
+          {/* Tracking is size-specific: the wide 0.4em spacing only works
+              at desktop size — at phone size it broke this line into three
+              ragged rows. Tighter on small screens, and split on purpose so
+              it wraps at a meaningful point. */}
+          <p className="mt-5 font-sans text-xs font-bold uppercase tracking-[0.22em] text-white/85 drop-shadow-md sm:mt-8 sm:text-xl sm:tracking-[0.4em]">
+            Japanese Motor Vehicle Spares
+            <span className="mt-1.5 block text-safety/90 sm:mt-0 sm:inline sm:text-white/85">
+              <span className="hidden sm:inline"> · </span>Since {SHOP.founded}
+            </span>
           </p>
-          <div className="mt-12 flex flex-col gap-4 sm:flex-row">
-            <Link
-              to="/browse"
-              className="btn-premium"
+
+          {/* Search is the one thing most visitors came to do, so it sits
+              right here instead of two taps away on /browse. Hands the query
+              off via ?q= (BrowsePage reads it on load); an empty search
+              still goes to /browse, i.e. the full list. */}
+          <form
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = heroQuery.trim();
+              void navigate(q === '' ? '/browse' : `/browse?q=${encodeURIComponent(q)}`);
+            }}
+            className="chrome-glass mt-9 flex w-full max-w-xl items-center gap-2 rounded-full border border-white/15 bg-graphite/60 p-1.5 pl-5 shadow-elevated backdrop-blur-xl transition-colors focus-within:border-safety/70 sm:mt-12"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-5 shrink-0 text-chalk/50" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path strokeLinecap="round" d="M20 20l-3.5-3.5" />
+            </svg>
+            <label htmlFor="hero-search" className="sr-only">
+              Search parts
+            </label>
+            {/* text-base (16px): anything smaller and iPhone Safari zooms
+                the whole page in when the field gets focus. */}
+            <input
+              id="hero-search"
+              type="search"
+              enterKeyHint="search"
+              value={heroQuery}
+              onChange={(e) => setHeroQuery(e.target.value)}
+              placeholder="Part number or name"
+              className="min-w-0 flex-1 bg-transparent py-2.5 text-base text-white placeholder:text-chalk/45 focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="pressable shrink-0 rounded-full bg-safety px-5 py-3 text-sm font-bold uppercase tracking-wider text-white transition-colors hover:bg-[#ff6b36]"
             >
-              Browse Parts
+              Search
+            </button>
+          </form>
+
+          <div className="mt-5 flex items-center gap-5 text-sm font-semibold text-chalk/80">
+            <Link to="/browse" className="pressable flex min-h-11 items-center gap-1.5 transition-colors hover:text-white">
+              Browse all parts <span aria-hidden="true" className="text-safety">→</span>
             </Link>
-            <Link
-              to="/visit"
-              className="rounded-full border border-chalk/30 px-8 py-3.5 text-sm font-bold uppercase tracking-wider text-white transition-all hover:border-white hover:bg-white/10"
-            >
-              Visit Our Store
+            <span className="h-4 w-px bg-white/20" aria-hidden="true" />
+            <Link to="/visit" className="pressable flex min-h-11 items-center gap-1.5 transition-colors hover:text-white">
+              Visit our store <span aria-hidden="true" className="text-safety">→</span>
             </Link>
           </div>
         </motion.div>
 
         {/* Scroll indicator */}
-        <div className="absolute bottom-10 z-10 flex flex-col items-center gap-2 text-chalk/30">
+        <div className="absolute bottom-10 z-10 hidden flex-col items-center gap-2 text-chalk/30 sm:flex">
           <span className="text-xs uppercase tracking-widest text-white/50">Scroll</span>
           <div className="h-10 w-[1px] animate-pulse bg-gradient-to-b from-white/60 to-transparent" />
         </div>
       </section>
 
       {/* ═══════ 2 — BROWSE CTA ═══════ */}
-      <section ref={browseRef} className={`relative z-20 flex h-screen min-h-[600px] flex-col justify-center overflow-hidden bg-graphite ${browseRevealClass}`}>
+      <section ref={browseRef} className={`relative z-20 flex flex-col justify-center overflow-hidden bg-graphite py-16 lg:h-screen lg:min-h-[600px] lg:py-0 ${browseRevealClass}`}>
         <div className="grid w-full lg:h-full lg:grid-cols-2">
           {/* Left Side: Real spare-part photo slider. Neither a hard box
               nor a faded-out edge — a heavily blurred, scaled-up copy of
               the same photo sits behind it as an ambient glow (the
               Apple/Spotify product-shot trick), so its colors bleed softly
               into the page while the photo itself stays crisp and sharp. */}
-          <motion.div style={{ y: browseImageY }} className="relative order-2 flex items-center justify-center px-6 py-14 lg:order-1 lg:h-full lg:px-12 lg:py-16">
-            <div className="relative aspect-square w-full max-w-[460px]">
+          <motion.div style={{ y: browseImageY }} className="relative order-2 flex items-center justify-center px-6 pt-10 lg:order-1 lg:h-full lg:px-12 lg:py-16">
+            <div className="relative aspect-square w-full max-w-[340px] sm:max-w-[460px]">
               {PART_CATEGORIES.map((part, i) => (
                 <div
                   key={part.id}
@@ -258,11 +325,11 @@ export function LandingPage() {
           </motion.div>
 
           {/* Right Side: Text & Button */}
-          <motion.div style={{ y: browseTextY }} className="order-1 flex flex-col justify-center px-8 py-10 sm:px-16 lg:order-2 lg:h-full lg:py-0">
+          <motion.div style={{ y: browseTextY }} className="order-1 flex flex-col justify-center px-6 sm:px-16 lg:order-2 lg:h-full">
             <h2 className="font-display text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl leading-tight">
               Explore the Full <br /><span className="text-safety">Catalogue</span>
             </h2>
-            <p className="mt-6 max-w-md text-base sm:text-lg text-chalk/70 leading-relaxed">
+            <p className="mt-4 max-w-md text-base leading-relaxed text-chalk/70 sm:mt-6 sm:text-lg">
               Engine parts, gearbox parts, brake parts, shock absorbers, electrical parts, lights & mirrors, body parts — all from trusted Japanese brands. We have precisely what you need.
             </p>
             <div className="mt-8">
@@ -276,10 +343,10 @@ export function LandingPage() {
       </section>
 
       {/* ═══════ 3 — STORE TEASER ═══════ */}
-      <section ref={visitRef} className={`flex h-screen min-h-[600px] flex-col justify-center overflow-hidden bg-graphite text-chalk ${visitRevealClass}`}>
+      <section ref={visitRef} className={`flex flex-col justify-center overflow-hidden bg-graphite py-16 text-chalk lg:h-screen lg:min-h-[600px] lg:py-0 ${visitRevealClass}`}>
         <div className="grid lg:h-full lg:grid-cols-2">
-          <motion.div style={{ y: visitImageY }} className="relative flex items-center justify-center px-6 py-14 lg:h-full lg:px-12 lg:py-16">
-            <div className="relative aspect-square w-full max-w-[460px]">
+          <motion.div style={{ y: visitImageY }} className="relative order-2 flex items-center justify-center px-6 pt-10 lg:order-1 lg:h-full lg:px-12 lg:py-16">
+            <div className="relative aspect-square w-full max-w-[340px] sm:max-w-[460px]">
               <picture className="contents" aria-hidden="true">
                 <source srcSet={webpSrc('/images/store-front.jpg')} type="image/webp" />
                 <img
@@ -314,7 +381,7 @@ export function LandingPage() {
               </div>
             </div>
           </motion.div>
-          <motion.div style={{ y: visitTextY }} className="flex flex-col justify-center px-8 py-8 sm:px-16 lg:py-0">
+          <motion.div style={{ y: visitTextY }} className="order-1 flex flex-col justify-center px-6 sm:px-16 lg:order-2">
             <p className="font-sans text-sm font-semibold uppercase tracking-[0.3em] text-safety/80">
               Our Flagship Store
             </p>
@@ -340,63 +407,75 @@ export function LandingPage() {
       </section>
 
       {/* ═══════ 4 — BRANDS ═══════ */}
-      <section ref={brandsRef} className={`min-h-screen flex flex-col justify-center bg-graphite py-28 border-t border-white/5 ${brandsRevealClass}`}>
+      <section ref={brandsRef} className={`flex flex-col justify-center border-t border-white/5 bg-graphite py-16 sm:py-28 lg:min-h-screen ${brandsRevealClass}`}>
         <div className="mx-auto max-w-7xl px-4 text-center">
           <p className="font-sans text-sm font-semibold uppercase tracking-[0.3em] text-safety/80">
             Trusted Partners
           </p>
-          <h2 className="mt-4 font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
+          <h2 className="mt-4 font-display text-3xl font-bold tracking-tight text-white sm:text-5xl">
             Premium <span className="text-safety">Brands</span> We Carry
           </h2>
         </div>
-        <div className="mt-16">
+        <div className="mt-6 sm:mt-16">
           <BrandMarquee row1Brands={VEHICLE_BRANDS} row2Brands={PART_BRAND_LOGOS} />
         </div>
       </section>
 
       {/* ═══════ 5 — CONTACT ═══════ */}
-      <section ref={contactRef} className={`min-h-screen flex flex-col justify-center bg-graphite py-28 border-t border-white/5 ${contactRevealClass}`}>
-        <div className="mx-auto max-w-5xl px-4 text-center">
-          <h2 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
+      <section ref={contactRef} className={`flex flex-col justify-center border-t border-white/5 bg-graphite py-16 sm:py-28 lg:min-h-screen ${contactRevealClass}`}>
+        {/* w-full: this sits in a flex column, where `mx-auto` alone makes
+            the box shrink to fit its content — that's what squeezed the
+            cards into a narrow strip down the middle on phones. */}
+        <div className="mx-auto w-full max-w-5xl px-5 text-center">
+          <h2 className="font-display text-3xl font-bold tracking-tight text-white sm:text-5xl">
             Get in <span className="text-safety">Touch</span>
           </h2>
 
-          <div className="mt-16 grid gap-6 sm:grid-cols-3">
-            <div className="group rounded-2xl border border-muted/10 bg-chalk/5 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:shadow-elevated-hover hover:border-safety/30">
-              <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-safety/10 text-safety transition-colors group-hover:bg-safety group-hover:text-white">
+          {/* Phones: compact rows (icon left, details right) — three tall
+              cards stacked was more than a screen of scrolling for three
+              lines of contact info. sm and up: the original card layout. */}
+          <div className="mt-8 grid gap-3 sm:mt-16 sm:grid-cols-3 sm:gap-6">
+            <div className="group flex items-center gap-4 rounded-2xl border border-muted/10 bg-chalk/5 p-5 text-left transition-all duration-300 hover:-translate-y-2 hover:border-safety/30 hover:shadow-elevated-hover sm:block sm:p-8">
+              <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-safety/10 text-safety transition-colors group-hover:bg-safety group-hover:text-white sm:mb-5 sm:h-14 sm:w-14">
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                 </svg>
               </div>
-              <p className="font-sans text-xs font-semibold uppercase tracking-widest text-muted">Phone</p>
-              <a href={telHref(SHOP.phonePrimary)} className="mt-3 block font-display text-xl font-bold text-white transition-colors hover:text-safety">
-                {SHOP.phonePrimary}
-              </a>
-              <a href={telHref(SHOP.phoneSecondary)} className="mt-1 block text-base text-muted transition-colors hover:text-safety">
-                {SHOP.phoneSecondary}
-              </a>
+              <div className="min-w-0">
+                <p className="font-sans text-xs font-semibold uppercase tracking-widest text-muted">Phone</p>
+                <a href={telHref(SHOP.phonePrimary)} className="mt-1 block font-display text-lg font-bold text-white transition-colors hover:text-safety sm:mt-3 sm:text-xl">
+                  {SHOP.phonePrimary}
+                </a>
+                <a href={telHref(SHOP.phoneSecondary)} className="mt-0.5 block text-base text-muted transition-colors hover:text-safety sm:mt-1">
+                  {SHOP.phoneSecondary}
+                </a>
+              </div>
             </div>
 
-            <div className="group rounded-2xl border border-muted/10 bg-chalk/5 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:shadow-elevated-hover hover:border-safety/30">
-              <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-safety/10 text-safety transition-colors group-hover:bg-safety group-hover:text-white">
+            <div className="group flex items-center gap-4 rounded-2xl border border-muted/10 bg-chalk/5 p-5 text-left transition-all duration-300 hover:-translate-y-2 hover:border-safety/30 hover:shadow-elevated-hover sm:block sm:p-8">
+              <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-safety/10 text-safety transition-colors group-hover:bg-safety group-hover:text-white sm:mb-5 sm:h-14 sm:w-14">
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
               </div>
-              <p className="font-sans text-xs font-semibold uppercase tracking-widest text-muted">Fax</p>
-              <p className="mt-3 font-display text-xl font-bold text-white">{SHOP.fax}</p>
+              <div className="min-w-0">
+                <p className="font-sans text-xs font-semibold uppercase tracking-widest text-muted">Fax</p>
+                <p className="mt-1 font-display text-lg font-bold text-white sm:mt-3 sm:text-xl">{SHOP.fax}</p>
+              </div>
             </div>
 
-            <div className="group rounded-2xl border border-muted/10 bg-chalk/5 p-8 text-left transition-all duration-300 hover:-translate-y-2 hover:shadow-elevated-hover hover:border-safety/30">
-              <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-safety/10 text-safety transition-colors group-hover:bg-safety group-hover:text-white">
+            <div className="group flex items-center gap-4 rounded-2xl border border-muted/10 bg-chalk/5 p-5 text-left transition-all duration-300 hover:-translate-y-2 hover:border-safety/30 hover:shadow-elevated-hover sm:block sm:p-8">
+              <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-safety/10 text-safety transition-colors group-hover:bg-safety group-hover:text-white sm:mb-5 sm:h-14 sm:w-14">
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
-              <p className="font-sans text-xs font-semibold uppercase tracking-widest text-muted">Email</p>
-              <a href={`mailto:${SHOP.email}`} className="mt-3 block font-display text-xl font-bold text-white transition-colors hover:text-safety">
-                {SHOP.email}
-              </a>
+              <div className="min-w-0">
+                <p className="font-sans text-xs font-semibold uppercase tracking-widest text-muted">Email</p>
+                <a href={`mailto:${SHOP.email}`} className="mt-1 block break-words font-display text-lg font-bold text-white transition-colors hover:text-safety sm:mt-3 sm:text-xl">
+                  {SHOP.email}
+                </a>
+              </div>
             </div>
           </div>
         </div>

@@ -9,17 +9,17 @@ import { SHOP, shopAddress, shopMapsEmbedUrl, shopMapsSearchUrl, telHref } from 
  */
 export function VisitPage() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-16 bg-graphite text-white">
+    <div className="mx-auto max-w-6xl bg-graphite px-5 py-8 text-white sm:py-16">
       <p className="font-sans text-sm font-semibold uppercase tracking-[0.3em] text-safety/80">Visit the counter</p>
-      <h1 className="mt-2 font-display text-4xl font-bold tracking-tight sm:text-5xl">
+      <h1 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-5xl">
         Come find us
       </h1>
       <p className="mt-4 max-w-xl text-chalk/70">
-        Bring the part number, the old part, or just tell us the vehicle. Stock status shown online
-        is a guide — call ahead to confirm anything not recently verified.
+        Bring the part number, the old part, or just tell us the vehicle. Call ahead to check
+        stock — we confirm availability by phone, not online.
       </p>
 
-      <div className="mt-12 grid gap-10 lg:grid-cols-5">
+      <div className="mt-8 grid gap-6 sm:mt-12 lg:grid-cols-5 lg:gap-10">
         {/* Store photo */}
         <div className="lg:col-span-2">
           <div className="relative flex aspect-4/3 flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-steel/10 text-center overflow-hidden shadow-2xl">
@@ -32,8 +32,8 @@ export function VisitPage() {
             <span className="relative font-display text-3xl font-bold text-white shadow-black drop-shadow-lg z-10">LANKA<span className="text-safety">AUTO</span></span>
           </div>
 
-          <dl className="mt-8 space-y-6">
-            <div className="p-6 rounded-2xl border border-white/5 bg-white/5 backdrop-blur-sm">
+          <dl className="mt-6 space-y-4 sm:mt-8 sm:space-y-6">
+            <div className="rounded-2xl border border-white/5 bg-white/5 p-5 sm:p-6">
               <dt className="font-sans text-xs font-semibold uppercase tracking-widest text-chalk/50">Address</dt>
               <dd className="mt-2 text-lg font-medium text-white">
                 {SHOP.addressLine1}
@@ -51,7 +51,7 @@ export function VisitPage() {
               </a>
             </div>
 
-            <div className="p-6 rounded-2xl border border-white/5 bg-white/5 backdrop-blur-sm">
+            <div className="rounded-2xl border border-white/5 bg-white/5 p-5 sm:p-6">
               <dt className="font-sans text-xs font-semibold uppercase tracking-widest text-chalk/50 mb-4">Opening hours</dt>
               <dd className="mt-1 space-y-2 text-sm">
                 {SHOP.hours.map((row) => (
@@ -63,7 +63,7 @@ export function VisitPage() {
               </dd>
             </div>
 
-            <div className="p-6 rounded-2xl border border-white/5 bg-white/5 backdrop-blur-sm">
+            <div className="rounded-2xl border border-white/5 bg-white/5 p-5 sm:p-6">
               <dt className="font-sans text-xs font-semibold uppercase tracking-widest text-chalk/50">Contact</dt>
               <dd className="mt-3 space-y-2">
                 <a href={telHref(SHOP.phonePrimary)} className="block font-display text-xl font-bold text-white transition-colors hover:text-safety">
@@ -83,7 +83,7 @@ export function VisitPage() {
 
         {/* Map */}
         <div className="lg:col-span-3">
-          <div className="h-full min-h-[500px] w-full rounded-2xl border border-white/10 overflow-hidden relative group shadow-2xl">
+          <div className="h-full min-h-[320px] w-full sm:min-h-[500px] rounded-2xl border border-white/10 overflow-hidden relative group shadow-2xl">
             <iframe
               title={`Map to ${shopAddress}`}
               src={shopMapsEmbedUrl}

@@ -91,6 +91,40 @@ html {
   transform: translateX(200%);
 }
 
+/* Feedback on press, not on release: on a phone there is no hover, so
+   without this a tap shows nothing until the next page has loaded and the
+   button feels dead. Short and ease-out so it lands on the same frame as
+   the finger. Shared by every tappable thing via the .pressable class. */
+.btn-premium:active,
+.pressable:active {
+  transform: scale(0.97);
+  transition: transform 100ms ease-out;
+}
+
+/* Phones with a home bar (iPhone X and later) — keep floating controls
+   clear of it. Needs viewport-fit=cover in index.html to report non-zero. */
+.safe-bottom {
+  bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
+
+/* Hide the native scrollbar on horizontal chip rows (chat suggestions) —
+   they're swiped, not dragged with a scrollbar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Translucent chrome falls back to solid for people who've asked the OS
+   for less transparency — text stays readable over busy hero photos. */
+@media (prefers-reduced-transparency: reduce) {
+  .chrome-glass {
+    background-color: var(--color-graphite) !important;
+    backdrop-filter: none !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

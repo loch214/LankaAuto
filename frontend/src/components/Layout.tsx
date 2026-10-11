@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useAuth } from '../auth/AuthContext';
 import { SHOP, telHref } from '../shopInfo';
 import { ChatWidget } from './ChatWidget';
@@ -20,6 +21,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
+  const reduceMotion = useReducedMotion();
   // Customer agent only (Phase 5) — staff have their own fast-search tool
   // (StaffSearchPage), and the staff agent (PLAN.md §8) is a separate,
   // later increment with different tools/tone, not this widget reused.
@@ -51,13 +53,13 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {/* ─── Main Navbar ─── */}
       <header
-        className={`sticky top-0 z-50 border-b border-white/5 bg-graphite/85 backdrop-blur-xl transition-shadow duration-300 ${
+        className={`chrome-glass sticky top-0 z-50 border-b border-white/5 bg-graphite/85 backdrop-blur-xl transition-shadow duration-300 ${
           scrolled ? 'shadow-[0_10px_30px_-15px_rgba(0,0,0,0.7)]' : 'shadow-none'
         }`}
       >
         {/* Brand gradient hairline, matching the footer's accent bar. */}
         <div className="h-[2px] w-full bg-gradient-to-r from-safety via-signal to-safety opacity-80" />
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3 sm:px-6 sm:py-5">
           <Link to="/" className="shrink-0 group flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-safety shadow-[0_0_10px_2px_rgba(255,90,31,0.6)]" />
             <Wordmark className="text-xl text-chalk transition-opacity group-hover:opacity-80 sm:text-2xl" />
@@ -88,10 +90,10 @@ export function Layout({ children }: { children: ReactNode }) {
           {/* Mobile nav trigger — below `sm` only. A compact Staff pill
               (never "Staff Login", so it can't wrap) plus a hamburger that
               opens the dropdown below for the links that don't fit. */}
-          <div className="flex items-center gap-3 sm:hidden">
+          <div className="flex items-center gap-2 sm:hidden">
             <Link
               to={user !== null ? '/staff' : '/staff/login'}
-              className="rounded-full border border-chalk/20 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-chalk shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-safety hover:bg-safety hover:text-white"
+              className="pressable flex h-11 items-center rounded-full border border-chalk/20 bg-white/[0.03] px-4 text-xs font-semibold uppercase tracking-wider text-chalk shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-safety hover:bg-safety hover:text-white"
             >
               Staff
             </Link>
@@ -100,7 +102,7 @@ export function Layout({ children }: { children: ReactNode }) {
               onClick={() => setMobileNavOpen((open) => !open)}
               aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
               aria-expanded={mobileNavOpen}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-chalk/20 text-chalk transition-colors hover:border-safety hover:text-safety"
+              className="pressable flex h-11 w-11 items-center justify-center rounded-full border border-chalk/20 text-chalk transition-colors hover:border-safety hover:text-safety"
             >
               {mobileNavOpen ? (
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4.5">
@@ -117,34 +119,48 @@ export function Layout({ children }: { children: ReactNode }) {
 
         {/* Mobile dropdown — the links that don't fit in the top row on a
             narrow screen. `sm:hidden` so it never renders once the full
-            desktop nav takes over. */}
-        {mobileNavOpen && (
-          <nav className="border-t border-white/5 bg-graphite px-6 py-4 sm:hidden">
-            <ul className="flex flex-col gap-1 text-sm font-medium text-chalk/80">
-              <li>
-                <Link to="/browse" className="block rounded-lg px-2 py-2.5 transition-colors hover:bg-white/5 hover:text-white">
-                  Browse Parts
-                </Link>
-              </li>
-              <li>
-                <Link to="/visit" className="block rounded-lg px-2 py-2.5 transition-colors hover:bg-white/5 hover:text-white">
-                  Visit Us
-                </Link>
-              </li>
-              <li>
-                <a
-                  href={telHref(SHOP.phonePrimary)}
-                  className="flex items-center gap-2 rounded-lg px-2 py-2.5 font-bold text-safety transition-colors hover:bg-white/5"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                  </svg>
-                  {SHOP.phonePrimary}
-                </a>
-              </li>
-            </ul>
-          </nav>
-        )}
+            desktop nav takes over. Opens downward out of the header it
+            belongs to and closes back up into it — same path both ways, so it reads as one panel
+            sliding, not two unrelated animations. Critically damped spring
+            (bounce 0): a tap carries no momentum, so no overshoot. */}
+        <AnimatePresence initial={false}>
+          {mobileNavOpen && (
+            <motion.nav
+              key="mobile-nav"
+              initial={reduceMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+              animate={reduceMotion ? { opacity: 1 } : { height: 'auto', opacity: 1 }}
+              exit={reduceMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+              transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+              className="overflow-hidden border-t border-white/5 sm:hidden"
+            >
+              <ul className="flex flex-col px-3 py-2 text-base font-medium text-chalk/85">
+                <li>
+                  <Link to="/browse" className="flex min-h-12 items-center justify-between rounded-xl px-3 transition-colors active:bg-white/10">
+                    Browse Parts
+                    <span aria-hidden="true" className="text-chalk/30">›</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/visit" className="flex min-h-12 items-center justify-between rounded-xl px-3 transition-colors active:bg-white/10">
+                    Visit Us
+                    <span aria-hidden="true" className="text-chalk/30">›</span>
+                  </Link>
+                </li>
+                <li>
+                  <a
+                    href={telHref(SHOP.phonePrimary)}
+                    className="flex min-h-12 items-center gap-2 rounded-xl px-3 font-bold text-safety transition-colors active:bg-white/10"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                    Call {SHOP.phonePrimary}
+                  </a>
+                </li>
+              </ul>
+            </motion.nav>
+          )}
+        </AnimatePresence>
       </header>
 
       <main className="flex-1">{children}</main>
@@ -159,10 +175,13 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="pegboard pointer-events-none absolute inset-0 opacity-[0.03]" />
         <div className="pointer-events-none absolute -left-32 top-0 h-96 w-96 rounded-full bg-safety/10 blur-3xl" />
 
-        <div className="relative mx-auto max-w-7xl px-6 py-12">
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="relative mx-auto max-w-7xl px-6 pt-12 pb-28 sm:pb-12">
+          {/* Two columns even on phones: in one column the footer was a
+              full extra screen of scrolling for four short lists. The
+              brand blurb and hours span both columns since they're wider. */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-10 lg:grid-cols-4">
             {/* Brand column */}
-            <div className="lg:col-span-1">
+            <div className="col-span-2 lg:col-span-1">
               <Wordmark className="text-2xl" />
               <p className="mt-3 text-sm leading-relaxed text-chalk/50">
                 Japanese Motor Vehicle Spares since {SHOP.founded}. Precision components for every vehicle on Sri Lankan roads.
@@ -207,7 +226,7 @@ export function Layout({ children }: { children: ReactNode }) {
             </div>
 
             {/* Hours */}
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <h4 className="font-display text-sm font-bold uppercase tracking-widest text-chalk/90">Store Hours</h4>
               <ul className="mt-5 space-y-2.5 text-sm text-chalk/40">
                 {SHOP.hours.map((h) => (
@@ -222,12 +241,12 @@ export function Layout({ children }: { children: ReactNode }) {
 
           {/* Bottom bar */}
           <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-chalk/10 pt-6 sm:flex-row">
-            <p className="flex items-center gap-2 text-xs text-chalk/30">
+            <p className="flex flex-wrap items-center justify-center gap-2 text-xs text-chalk/30">
               © {new Date().getFullYear()} LankaAuto. All rights reserved.
               <span className="h-1 w-1 rounded-full bg-chalk/20" />
               <span className="text-chalk/20">Since {SHOP.founded}</span>
             </p>
-            <p className="text-xs text-chalk/20">
+            <p className="text-center text-xs text-chalk/30">
               {SHOP.addressLine1}, {SHOP.addressLine2}
             </p>
           </div>

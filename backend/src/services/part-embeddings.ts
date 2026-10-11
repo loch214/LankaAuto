@@ -160,3 +160,22 @@ export async function nearestPartsWithDetails(queryVector: readonly number[], li
     distance: r.distance,
   }));
 }
+
+/**
+ * Cosine distance from `queryVector` to each of a *given* set of parts,
+ * nearest first — "of the parts on record for this vehicle, which are the
+ * ones the customer asked for?". The plain nearest-neighbour search above
+ * ranks the whole catalogue, so for a narrow set it either misses parts
+ * (limit too low) or pulls in unrelated ones (limit too high).
+ */
+export async function distancesForParts(queryVector: readonly number[], partIds: readonly string[]): Promise<NearestPart[]> {
+  if (partIds.length === 0) return [];
+  const literal = toVectorLiteral(queryVector);
+  const rows = await prisma.$queryRaw<{ part_id: string; distance: number }[]>`
+    SELECT part_id, (embedding <=> ${literal}::vector) AS distance
+    FROM part_embeddings
+    WHERE model = ${EMBEDDING_MODEL_NAME} AND part_id = ANY(${partIds as string[]}::uuid[])
+    ORDER BY distance
+  `;
+  return rows.map((r) => ({ partId: r.part_id, distance: r.distance }));
+}

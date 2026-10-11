@@ -10,7 +10,7 @@
  */
 export function PartTag({ children }: { children: string }) {
   return (
-    <span className="inline-flex items-center rounded-sm border-l-2 border-safety bg-graphite px-2 py-0.5 font-mono text-xs tracking-wider text-chalk">
+    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-sm border-l-2 border-safety bg-graphite px-2 py-0.5 font-mono text-xs tracking-wider text-chalk">
       {children}
     </span>
   );

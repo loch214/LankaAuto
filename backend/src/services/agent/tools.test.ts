@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import { prisma, disconnect } from '../../lib/prisma.js';
 import { executeTool, ToolArgumentError, ToolNotFoundError } from './tools.js';
 
@@ -35,65 +35,112 @@ describe('executeTool', () => {
     }
   });
 
-  it('lookup_vehicle finds a real vehicle by partial, case-insensitive make/model', async () => {
-    const result = await executeTool('lookup_vehicle', { make: 'toyota', model: 'hiace' });
-    const vehicles = result.response['vehicles'] as { make: string; model: string }[];
-    expect(vehicles.some((v) => v.make === 'TOYOTA' && v.model === 'HIACE')).toBe(true);
-    expect(result.citedParts).toEqual([]); // vehicles aren't parts
-  });
-
-  it('lookup_vehicle rejects a call with neither make, model, nor chassis code', async () => {
-    await expect(executeTool('lookup_vehicle', {})).rejects.toThrow(ToolArgumentError);
-  });
-
   /**
-   * Regression: reproduced live in the browser before this fix. A customer
-   * answering the agent's own disambiguation question with just a chassis
-   * code ("the CS3, 2003-2007 one") got "I couldn't find a record for a
-   * Mitsubishi Lancer CS3" — even though the vehicle it had just listed
-   * still existed — because `lookup_vehicle` had no way to search on
-   * `chassisCode` at all, only `make`/`model`.
+   * The 2026-10-11 redesign (see the tools.ts header): the fitment tools take
+   * the vehicle as the customer described it and, when that matches more
+   * than one vehicle, refuse to give a single verdict. Reproduced before:
+   * "Oil filter for Suzuki Alto" matched Alto F8D and HA36S, the model
+   * checked only F8D, and told the customer it "fits your Alto (F8D)".
    *
-   * Builds its own vehicle rather than borrowing a seeded one: the sample
-   * catalogue (the only current source of non-null chassis codes) is
-   * explicitly purgeable, and GMB's own 62 rows never carry one at all.
+   * Builds throwaway vehicles rather than borrowing seeded ones: the sample
+   * catalogue (the only source of chassis codes/years) is purgeable. The
+   * parts are GMB U-joints, which are permanent.
    */
-  it('lookup_vehicle finds a vehicle by chassis code alone, with no make or model', async () => {
-    const unique = `TOOLS-TEST-CHASSIS-${Date.now()}`;
-    const vehicle = await prisma.vehicle.create({
-      data: { make: 'TESTMAKE', model: 'TESTMODEL', chassisCode: unique, identityKey: unique },
+  describe('fitment tools resolve the vehicle themselves', () => {
+    const tag = `TT${Date.now()}`;
+    let partA: { id: string };
+    let partB: { id: string };
+    let partC: { id: string };
+    let older: { id: string };
+    let newer: { id: string };
+
+    beforeAll(async () => {
+      partA = await prisma.part.findFirstOrThrow({ where: { partNumber: 'GUT12' } });
+      partB = await prisma.part.findFirstOrThrow({ where: { partNumber: 'GU1000HD' } });
+      partC = await prisma.part.findFirstOrThrow({ where: { partNumber: 'GU1100' } }); // on record for neither
+      older = await prisma.vehicle.create({
+        data: { make: `${tag}MAKE`, model: 'TESTCAR', chassisCode: `${tag}OLD`, yearFrom: 2000, yearTo: 2010, identityKey: `${tag}-old` },
+      });
+      newer = await prisma.vehicle.create({
+        data: { make: `${tag}MAKE`, model: 'TESTCAR', chassisCode: `${tag}NEW`, yearFrom: 2014, yearTo: 2021, identityKey: `${tag}-new` },
+      });
+      // partA is on record for the older car only; the newer one has two
+      // parts of the same kind (both U-joints) — a real choice.
+      await prisma.partFitment.createMany({
+        data: [
+          { partId: partA.id, vehicleId: older.id },
+          { partId: partA.id, vehicleId: newer.id },
+          { partId: partB.id, vehicleId: newer.id },
+        ],
+      });
     });
 
-    try {
-      const result = await executeTool('lookup_vehicle', { chassisCode: unique });
-      const vehicles = result.response['vehicles'] as { vehicleId: string; chassisCode: string | null }[];
-      expect(vehicles.some((v) => v.vehicleId === vehicle.id && v.chassisCode === unique)).toBe(true);
-    } finally {
-      await prisma.vehicle.delete({ where: { id: vehicle.id } });
-    }
-  });
+    afterAll(async () => {
+      await prisma.vehicle.deleteMany({ where: { id: { in: [older.id, newer.id] } } }); // fitments cascade
+    });
 
-  it('check_fitment cites the part it checked and returns a real verdict', async () => {
-    const part = await prisma.part.findFirstOrThrow({ where: { partNumber: 'GUT12' } });
-    const fitment = await prisma.partFitment.findFirstOrThrow({ where: { partId: part.id } });
+    it('check_part_fits: two matching vehicles with different answers → NEED_VARIANT, never a confirmed fit', async () => {
+      // partB is on record for the newer car only, so the answer depends on which one they have.
+      const result = await executeTool('check_part_fits', { partId: partB.id, make: `${tag}make`, model: 'testcar' });
+      expect(result.response['status']).toBe('NEED_VARIANT');
+      expect(result.response).not.toHaveProperty('verdict');
+      expect((result.response['variants'] as unknown[]).length).toBe(2);
+      expect(result.confirmedFit).not.toBe(true);
+    });
 
-    const result = await executeTool('check_fitment', { partId: part.id, vehicleId: fitment.vehicleId });
-    expect(result.response['verdict']).toBe('CONFIRMED');
-    expect(result.citedParts).toEqual([{ partId: part.id, partNumber: 'GUT12', rawName: part.rawName }]);
-  });
+    it('check_part_fits: same answer for every variant → says it once, no pointless "which one?"', async () => {
+      const listed = await executeTool('check_part_fits', { partId: partA.id, make: `${tag}MAKE`, model: 'TESTCAR' });
+      expect(listed.response['status']).toBe('LISTED_FOR_ALL');
+      expect(listed.confirmedFit).not.toBe(true); // theirs may be a variant not on record
 
-  it('check_fitment surfaces an unknown part id as a tool argument error, not a crash', async () => {
-    const vehicle = await prisma.vehicle.findFirstOrThrow();
-    await expect(
-      executeTool('check_fitment', { partId: '00000000-0000-0000-0000-000000000000', vehicleId: vehicle.id }),
-    ).rejects.toThrow(ToolArgumentError);
-  });
+      const neither = await executeTool('check_part_fits', { partId: partC.id, make: `${tag}MAKE`, model: 'TESTCAR' });
+      expect(neither.response['status']).toBe('NO_MATCH');
+    });
 
-  it('find_vehicle_fitments flags the real Mitsubishi Canter ambiguous case', async () => {
-    const vehicle = await prisma.vehicle.findFirstOrThrow({ where: { make: 'MITSUBISHI', model: 'CANTER' } });
-    const result = await executeTool('find_vehicle_fitments', { vehicleId: vehicle.id });
-    expect(result.response['ambiguous']).toBe(true);
-    expect(result.citedParts.length).toBeGreaterThan(1);
+    it('check_part_fits: chassis code alone narrows to one vehicle → CONFIRMED', async () => {
+      const result = await executeTool('check_part_fits', { partId: partA.id, chassisCode: `${tag}OLD` });
+      expect(result.response['status']).toBe('CONFIRMED');
+      expect(result.confirmedFit).toBe(true);
+    });
+
+    it('check_part_fits: a year inside one production range narrows to that vehicle', async () => {
+      const result = await executeTool('check_part_fits', { partId: partA.id, make: `${tag}MAKE`, model: 'TESTCAR', year: 2016 });
+      expect(result.response['vehicle']).toContain(`${tag}NEW`);
+    });
+
+    it('check_part_fits: a year matching no range keeps every variant and says so', async () => {
+      const result = await executeTool('check_part_fits', { partId: partB.id, make: `${tag}MAKE`, model: 'TESTCAR', year: 2012 });
+      expect(result.response['status']).toBe('NEED_VARIANT');
+      expect(result.response['yearNote']).toBeDefined();
+    });
+
+    it('check_part_fits: accepts a part number in place of the id', async () => {
+      const result = await executeTool('check_part_fits', { partId: 'gut12', chassisCode: `${tag}OLD` });
+      expect(result.response['status']).toBe('CONFIRMED');
+    });
+
+    it('check_part_fits: unknown vehicle → VEHICLE_NOT_FOUND, not a guess', async () => {
+      const result = await executeTool('check_part_fits', { partId: partA.id, make: `${tag}NOSUCHMAKE` });
+      expect(result.response['status']).toBe('VEHICLE_NOT_FOUND');
+      expect(result.confirmedFit).not.toBe(true);
+    });
+
+    it('find_parts_for_vehicle: two matching vehicles → NEED_VARIANT with per-variant parts', async () => {
+      const result = await executeTool('find_parts_for_vehicle', { make: `${tag}MAKE`, model: 'TESTCAR' });
+      expect(result.response['status']).toBe('NEED_VARIANT');
+      expect(result.confirmedFit).not.toBe(true);
+    });
+
+    it('find_parts_for_vehicle: two parts of the same kind for one vehicle → flagged as a choice', async () => {
+      const result = await executeTool('find_parts_for_vehicle', { chassisCode: `${tag}NEW` });
+      expect(result.response['status']).toBe('FOUND');
+      expect((result.response['parts'] as unknown[]).length).toBe(2);
+      expect(result.response['tellCustomer']).toMatch(/Never pick one/);
+    });
+
+    it('rejects a vehicle description with no make, model or chassis code', async () => {
+      await expect(executeTool('check_part_fits', { partId: partA.id })).rejects.toThrow(ToolArgumentError);
+    });
   });
 
   it('rejects an unknown tool name', async () => {

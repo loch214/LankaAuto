@@ -29,6 +29,7 @@
     "search": "tsx src/scripts/search-cli.ts",
     "eval": "tsx src/scripts/run-eval.ts",
     "bench:chat": "tsx src/scripts/bench-chat.ts",
+    "trace:chat": "tsx src/scripts/trace-chat.ts",
     "dev": "tsx watch src/server.ts",
     "db:verify": "npm run db:reset && npm run check:db",
     "migrate:apply": "prisma migrate deploy && npm run check:db",

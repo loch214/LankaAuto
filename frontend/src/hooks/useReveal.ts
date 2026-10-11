@@ -17,9 +17,13 @@ export function useReveal<T extends HTMLElement>() {
     const el = ref.current;
     if (el === null) return;
 
+    // Low threshold on purpose: on phones the landing sections are no longer
+    // forced to one screen tall, and a section much taller than the screen
+    // can never be 35% visible at once — at the old 0.35 it would never
+    // reveal and just stay invisible.
     const observer = new IntersectionObserver(
       ([entry]) => setVisible(entry.isIntersecting),
-      { threshold: 0.35 },
+      { threshold: 0.15 },
     );
     observer.observe(el);
     return () => observer.disconnect();
